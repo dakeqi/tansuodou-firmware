@@ -152,8 +152,16 @@ jobs:
           
           FILENAME="tansuodou-${{ matrix.board }}-v${{ steps.version.outputs.version }}.bin"
           
-          cp ~/micropython/ports/esp32/build-${{ matrix.board }}/firmware.bin \
-            $GITHUB_WORKSPACE/binaries/$FILENAME
+          # 🔥 优先使用合并后的完整固件（包含bootloader）
+          if [ -f "~/micropython/ports/esp32/build-${{ matrix.board }}/firmware-combined.bin" ]; then
+            echo "✅ 找到合并固件，使用 firmware-combined.bin"
+            cp ~/micropython/ports/esp32/build-${{ matrix.board }}/firmware-combined.bin \
+              $GITHUB_WORKSPACE/binaries/$FILENAME
+          else
+            echo "⚠️  未找到 firmware-combined.bin，使用 firmware.bin"
+            cp ~/micropython/ports/esp32/build-${{ matrix.board }}/firmware.bin \
+              $GITHUB_WORKSPACE/binaries/$FILENAME
+          fi
           
           echo "Saved: $FILENAME"
           ls -lh $GITHUB_WORKSPACE/binaries/$FILENAME
