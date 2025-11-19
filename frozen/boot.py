@@ -1,5 +1,5 @@
 # 搭豆物联 2.0 - 启动脚本
-# 版本: v3.0.0
+# 版本: v3.0.1
 # 职责：系统初始化 + 启动编排
 
 import sys
@@ -7,8 +7,8 @@ import json
 import time
 
 # 固件版本信息
-FIRMWARE_VERSION = "3.0.0"
-FIRMWARE_BUILD = "20251119-v3.1"
+FIRMWARE_VERSION = "3.0.1"
+FIRMWARE_BUILD = "20251119-v3.2"
 FIRMWARE_NAME = "搭豆物联 TansuoDou IoT Platform"
 
 print("\n" + "="*50)
