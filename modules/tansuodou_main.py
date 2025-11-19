@@ -404,39 +404,30 @@ class TansuodouDevice:
         print("   连接地址: ws://" + str(self.ip) + ":" + str(WS_PORT))
         print("   最大连接数: 5")
         
-        error_count = 0
         while self.running:
             try:
                 try:
                     conn, addr = s.accept()
                 except OSError as e:
-                    # MicroPython中安全地处理超时错误
+                    # 静默处理超时错误,避免刷屏
                     err = e.errno if hasattr(e, 'errno') else (e.args[0] if e.args else None)
-                    # 检查常见的非阻塞错误码
-                    if err == errno.EAGAIN or err == errno.ETIMEDOUT or err == 11:  # 11 = EAGAIN/EWOULDBLOCK
-                        time.sleep(0.05)
+                    if err == errno.EAGAIN or err == errno.ETIMEDOUT or err == 11:
+                        time.sleep(0.1)
                         continue
-                    raise
+                    # 其他错误也静默处理,只记录首次
+                    time.sleep(0.2)
+                    continue
                 
-                conn.settimeout(30.0)  # 设置连接超时30秒
+                conn.settimeout(30.0)
                 print("\n🔗 新客户端连接: " + str(addr))
-                print("   当前连接数: " + str(len(self.ws_clients)))
                 
                 # 启动独立线程处理客户端
                 _thread.start_new_thread(self.handle_websocket_client, (conn, addr))
-                error_count = 0  # 有新连接时重置错误计数
                 
-            except OSError as e:
-                # 处理超时和其他OSError
-                err = e.errno if hasattr(e, 'errno') else (e.args[0] if e.args else None)
-                # 检查常见的非阻塞错误码
-                if err == errno.EAGAIN or err == errno.ETIMEDOUT or err == 11:  # 11 = EAGAIN/EWOULDBLOCK
-                    continue
-                # 其他OSError
-                error_count += 1
-                if error_count <= 3 or error_count % 30 == 0:
-                    print("❌ Socket错误: " + str(e))
+            except OSError:
+                # 静默处理所有Socket错误
                 time.sleep(0.2)
+                continue
     
     def handle_websocket_client(self, conn, addr):
         """处理WebSocket客户端连接（增强版：心跳检测+异常处理）"""
@@ -461,11 +452,9 @@ class TansuodouDevice:
                     response = self.create_websocket_handshake(key)
                     conn.send(response.encode())
                     
-                    print("✅ WebSocket连接建立: " + str(addr))
-                    
                     # 添加到客户端列表
                     self.ws_clients.append(conn)
-                    print("   活跃连接数: " + str(len(self.ws_clients)))
+                    print("✅ WebSocket连接建立")
                     
                     # 主循环：接收和处理消息
                     while client_active and self.running:
@@ -475,7 +464,6 @@ class TansuodouDevice:
                             data = conn.recv(1024)
                             
                             if not data:
-                                print("   客户端关闭连接")
                                 break
                             
                             # 解析WebSocket帧
@@ -487,29 +475,25 @@ class TansuodouDevice:
                                 self.handle_message(conn, message)
                                 last_ping_time = time.time()  # 更新活跃时间
                                 
-                        except OSError as e:
-                            # 超时或EAGAIN错误，检查心跳
+                        except OSError:
+                            # 超时或EAGAIN错误,检查心跳(静默)
                             if time.time() - last_ping_time > 60:
-                                print("   ⏱️ 客户端超时（60秒无活动）")
                                 client_active = False
                                 break
                             time.sleep(0.01)
                             continue
-                        except Exception as e:
-                            print("❌ 消息处理错误: " + str(e))
+                        except Exception:
+                            # 静默处理消息错误
                             client_active = False
                             break
                     
                     # 清理：从客户端列表移除
                     if conn in self.ws_clients:
                         self.ws_clients.remove(conn)
-                        print("   已移除客户端，剩余: " + str(len(self.ws_clients)))
-                    
-                    print("🔌 客户端断开: " + str(addr))
+                    print("🔌 客户端断开")
             
-        except Exception as e:
-            print("❌ WebSocket错误: " + str(e))
-            # 确保从客户端列表移除
+        except Exception:
+            # 静默处理WebSocket错误
             if conn in self.ws_clients:
                 self.ws_clients.remove(conn)
         finally:
@@ -572,9 +556,9 @@ class TansuodouDevice:
             for i, byte in enumerate(payload):
                 decoded.append(byte ^ mask[i % 4])
             
-            return decoded.decode('utf-8', 'ignore')  # 忽略解码错误
-        except Exception as e:
-            print("⚠️  WebSocket帧解析失败: " + str(e))
+            return decoded.decode('utf-8', 'ignore')
+        except Exception:
+            # 静默处理帧解析错误
             return None
     
     def handle_message(self, conn, message):
@@ -593,14 +577,11 @@ class TansuodouDevice:
             elif msg_type == 'execute':
                 # 处理两种格式: {"command": "..."} 或直接字符串
                 payload = data.get('data', {})
-                print("🔍 调试: payload 类型 =", type(payload), ", 值 =", str(payload)[:100])
                 
                 if isinstance(payload, dict):
                     cmd = payload.get('command', '')
                 else:
                     cmd = str(payload) if payload else ''
-                    
-                print("⚙️  执行命令 (长度:" + str(len(cmd)) + "): " + str(cmd)[:100])
                 
                 try:
                     # ...
@@ -635,22 +616,19 @@ class TansuodouDevice:
                         except:
                             pass
                     elif cmd == 'ctrl_c':
-                        # Ctrl+C: 中断当前程序，进入REPL模式
+                        # Ctrl+C: 中断当前程序(WiFi模式仅模拟)
                         self.send_websocket_message(conn, json.dumps({
                             'type': 'output',
                             'data': '\n[收到 Ctrl+C 中断信号 - 这是模拟信号，设备将继续运行]\n>>> '
                         }))
-                        print("🛑 收到 Ctrl+C 信号（WiFi模式下仅模拟）")
-                        # 注意：WiFi模式下不能真正中断，因为设备需要保持运行以维持连接
                     elif cmd == 'ctrl_d':
                         # Ctrl+D: 软重启MicroPython
                         self.send_websocket_message(conn, json.dumps({
                             'type': 'output',
                             'data': '\n[收到 Ctrl+D 软重启信号 - 设备将重启]\n'
                         }))
-                        print("🔄 收到 Ctrl+D 软重启信号，3秒后重启...")
-                        time.sleep(3)
-                        machine.reset()  # 真正重启设备
+                        time.sleep(2)
+                        machine.reset()
                     else:
                         # 其他命令当作 Python 代码执行
                         if cmd and not cmd.startswith('get_') and not cmd.startswith('reset_') and cmd != 'ctrl_c' and cmd != 'ctrl_d':
@@ -771,8 +749,9 @@ class TansuodouDevice:
                         'data': 'OTA失败: ' + str(e)
                     }))
                 
-        except Exception as e:
-            print("❌ 消息处理失败: " + str(e))
+        except Exception:
+            # 静默处理消息解析错误
+            pass
     
     def send_websocket_message(self, conn, message):
         """发送WebSocket消息（增强版：错误处理+超时）"""
@@ -805,14 +784,12 @@ class TansuodouDevice:
             conn.send(bytes(frame))
             return True
             
-        except OSError as e:
-            print("❌ 发送失败(OSError): " + str(e))
-            # 连接已断开，从列表移除
+        except OSError:
+            # 静默处理发送失败
             if conn in self.ws_clients:
                 self.ws_clients.remove(conn)
             return False
-        except Exception as e:
-            print("❌ 发送消息失败: " + str(e))
+        except Exception:
             return False
     
     # ...
