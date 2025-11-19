@@ -173,3 +173,90 @@ jobs:
             git pull --rebase origin master
             git push origin master
           fi
+      
+      - name: Upload Firmware Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.board }}
+          path: binaries/tansuodou-${{ matrix.board }}-v${{ steps.version.outputs.version }}.bin
+          retention-days: 90
+
+  release:
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Extract Version
+        id: version
+        run: |
+          VERSION=$(grep 'FIRMWARE_VERSION = ' frozen/boot.py | sed 's/.*"\(.*\)".*/\1/')
+          BUILD=$(grep 'FIRMWARE_BUILD = ' frozen/boot.py | sed 's/.*"\(.*\)".*/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build=$BUILD" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Firmware version: $VERSION (Build: $BUILD)"
+      
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: firmware-artifacts
+      
+      - name: Prepare Release Files
+        run: |
+          mkdir -p release-files
+          cp firmware-artifacts/firmware-ESP32_GENERIC/*.bin release-files/
+          cp firmware-artifacts/firmware-ESP32_GENERIC_S2/*.bin release-files/
+          cp firmware-artifacts/firmware-ESP32_GENERIC_S3/*.bin release-files/
+          cp firmware-artifacts/firmware-ESP32_GENERIC_C3/*.bin release-files/
+          ls -lh release-files/
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "探索豆固件 ${{ steps.version.outputs.version }}"
+          body: |
+            ## 🚀 探索豆 ESP32 固件 ${{ steps.version.outputs.version }}
+            
+            **Build:** ${{ steps.version.outputs.build }}
+            **构建时间:** ${{ github.event.head_commit.timestamp }}
+            
+            ### 📦 支持的硬件平台
+            
+            - ✅ ESP32 (4MB Flash)
+            - ✅ ESP32-S2 (4MB Flash)
+            - ✅ ESP32-S3 (8MB Flash)
+            - ✅ ESP32-C3 (4MB Flash)
+            
+            ### 📖 使用方法
+            
+            1. 访问 [探索豆物联平台](https://tansuodou.com/firmware/flash)
+            2. 选择对应的芯片型号
+            3. 下载本 Release 中的固件文件
+            4. 使用在线烧录工具或 esptool.py 烧录
+            
+            ### 🔧 手动烧录命令
+            
+            ```bash
+            # ESP32 / ESP32-S2 / ESP32-C3
+            esptool.py --port COM3 write_flash 0x1000 tansuodou-XXX-v${{ steps.version.outputs.version }}.bin
+            
+            # ESP32-S3
+            esptool.py --port COM3 write_flash 0x0 tansuodou-ESP32_GENERIC_S3-v${{ steps.version.outputs.version }}.bin
+            ```
+            
+            ### 📝 更新内容
+            
+            ${{ github.event.head_commit.message }}
+          files: release-files/*.bin
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
