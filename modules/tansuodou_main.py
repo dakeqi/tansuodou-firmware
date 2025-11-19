@@ -25,16 +25,9 @@ try:
 except:
     print("⚠️  OTA HTTP服务器模块未找到")
 
-# 从 boot.py 导入版本信息（延迟导入）
-try:
-    import boot
-    FIRMWARE_VERSION = boot.FIRMWARE_VERSION
-    FIRMWARE_BUILD = boot.FIRMWARE_BUILD
-    print("✅ 版本信息导入成功: v" + FIRMWARE_VERSION)
-except Exception as e:
-    print("⚠️  版本信息导入失败: " + str(e))
-    FIRMWARE_VERSION = "3.0.0"
-    FIRMWARE_BUILD = "20251119-v3"
+# 固件版本信息（与boot.py保持一致）
+FIRMWARE_VERSION = "3.0.3"
+FIRMWARE_BUILD = "20251119-v3.5"
 
 # 云端API地址配置
 # 生产环境：使用云托管公网地址（默认）
