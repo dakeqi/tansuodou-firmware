@@ -6,6 +6,7 @@ on:
       - 'frozen/**'
       - 'modules/**'
       - 'partitions/**'
+      - '.github/workflows/**'  # 监听workflow文件变化
     branches:
       - master
   workflow_dispatch:
