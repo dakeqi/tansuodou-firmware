@@ -158,22 +158,6 @@ jobs:
           echo "Saved: $FILENAME"
           ls -lh $GITHUB_WORKSPACE/binaries/$FILENAME
       
-      - name: Commit Firmware
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          FILENAME="tansuodou-${{ matrix.board }}-v${{ steps.version.outputs.version }}.bin"
-          git add binaries/$FILENAME
-          
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "build: ${{ matrix.board }} v${{ steps.version.outputs.version }}"
-            git pull --rebase origin master
-            git push origin master
-          fi
-      
       - name: Upload Firmware Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -210,12 +194,27 @@ jobs:
       
       - name: Prepare Release Files
         run: |
-          mkdir -p release-files
+          mkdir -p release-files binaries
           cp firmware-artifacts/firmware-ESP32_GENERIC/*.bin release-files/
           cp firmware-artifacts/firmware-ESP32_GENERIC_S2/*.bin release-files/
           cp firmware-artifacts/firmware-ESP32_GENERIC_S3/*.bin release-files/
           cp firmware-artifacts/firmware-ESP32_GENERIC_C3/*.bin release-files/
+          cp release-files/*.bin binaries/
           ls -lh release-files/
+      
+      - name: Commit Firmware to Repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add binaries/*.bin
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "build: Release v${{ steps.version.outputs.version }} - All platforms"
+            git push origin master
+          fi
       
       - name: Create Release
         uses: softprops/action-gh-release@v1
