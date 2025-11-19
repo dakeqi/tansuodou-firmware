@@ -9,6 +9,8 @@ import ubinascii
 import time
 import _thread
 import errno
+import sys
+import io
 
 try:
     import ujson as json
@@ -26,8 +28,8 @@ except:
     print("⚠️  OTA HTTP服务器模块未找到")
 
 # 固件版本信息（与boot.py保持一致）
-FIRMWARE_VERSION = "3.0.3"
-FIRMWARE_BUILD = "20251119-v3.5"
+FIRMWARE_VERSION = "3.0.4"
+FIRMWARE_BUILD = "20251119-v3.6"
 
 # 云端API地址配置
 # 生产环境：使用云托管公网地址（默认）
@@ -98,7 +100,6 @@ class TansuodouDevice:
                     last_status = status
                 
                 # MicroPython不支持end参数，改用sys.stdout.write
-                import sys
                 sys.stdout.write('.')
                 time.sleep(1)
                 timeout -= 1
@@ -627,8 +628,7 @@ class TansuodouDevice:
                         if cmd and not cmd.startswith('get_') and not cmd.startswith('reset_') and cmd != 'ctrl_c' and cmd != 'ctrl_d':
                             try:
                                 # 捕获 print 输出：重定向 stdout
-                                import sys
-                                import io
+                                # sys 和 io 已在模块顶部导入
                                 
                                 # 创建字符串缓冲区捕获输出
                                 output_buffer = io.StringIO()
