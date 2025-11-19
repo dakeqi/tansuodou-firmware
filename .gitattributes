@@ -1,0 +1,10 @@
+# MicroPython 固件文件必须使用 LF 行尾符
+# 这样 mpy-cross 编译器才能正确处理
+
+# 所有 Python 文件强制使用 LF
+*.py text eol=lf
+
+# 说明：
+# - text: 标记为文本文件
+# - eol=lf: 在提交时自动转换为 LF 格式
+

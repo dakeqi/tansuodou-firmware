@@ -1,0 +1,175 @@
+name: Build ESP32 Firmware
+
+on:
+  push:
+    paths:
+      - 'frozen/**'
+      - 'modules/**'
+      - 'partitions/**'
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        board:
+          - ESP32_GENERIC
+          - ESP32_GENERIC_S2
+          - ESP32_GENERIC_S3
+          - ESP32_GENERIC_C3
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git wget flex bison gperf python3 python3-pip \
+            cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+      
+      - name: Cache ESP-IDF
+        id: cache-esp-idf
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/esp-idf
+            ~/.espressif
+          key: esp-idf-v5.0.4-${{ runner.os }}-${{ hashFiles('**/.github/workflows/*.yml') }}
+      
+      - name: Setup ESP-IDF
+        if: steps.cache-esp-idf.outputs.cache-hit != 'true'
+        run: |
+          echo "Installing ESP-IDF v5.0.4..."
+          git clone --depth 1 --branch v5.0.4 --recursive \
+            https://github.com/espressif/esp-idf.git ~/esp-idf
+          cd ~/esp-idf
+          ./install.sh esp32,esp32s2,esp32s3,esp32c3
+      
+      - name: Cache MicroPython
+        id: cache-micropython
+        uses: actions/cache@v4
+        with:
+          path: ~/micropython
+          key: micropython-v1.22.0-${{ runner.os }}-${{ hashFiles('**/*.py') }}
+      
+      - name: Clone MicroPython
+        if: steps.cache-micropython.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch v1.22.0 \
+            https://github.com/micropython/micropython.git ~/micropython
+          cd ~/micropython/mpy-cross
+          make
+      
+      - name: Init Submodules
+        run: |
+          cd ~/micropython/ports/esp32
+          . ~/esp-idf/export.sh
+          make submodules
+      
+      - name: Prepare Firmware Files
+        run: |
+          echo "=== Preparing TansuoDou Firmware ==="
+          
+          mkdir -p ~/micropython/ports/esp32/tansuodou_frozen
+          cp frozen/*.py ~/micropython/ports/esp32/tansuodou_frozen/
+          echo "Frozen modules copied"
+          
+          mkdir -p ~/micropython/ports/esp32/modules
+          cp modules/*.py ~/micropython/ports/esp32/modules/
+          echo "Filesystem modules copied"
+          
+          mkdir -p ~/micropython/ports/esp32/modules/user_code/{lib,examples}
+          
+          cat > ~/micropython/ports/esp32/modules/user_code/examples/hello.py << 'EOF'
+          print('Hello from TansuoDou IoT Platform!')
+          EOF
+          
+          cp partitions/*.csv ~/micropython/ports/esp32/
+          
+          cat > ~/micropython/ports/esp32/boards/manifest_tansuodou.py << 'EOF'
+          include("$(PORT_DIR)/boards/manifest.py")
+          freeze("$(PORT_DIR)/tansuodou_frozen", (
+              "boot.py",
+              "wifi_config_helper.py",
+              "ide_helper.py",
+          ))
+          EOF
+          
+          echo "=== Preparation Complete ==="
+      
+      - name: Build Firmware
+        run: |
+          cd ~/micropython/ports/esp32
+          . ~/esp-idf/export.sh
+          
+          echo "=== Building ${{ matrix.board }} ==="
+          
+          if [ "${{ matrix.board }}" = "ESP32_GENERIC_S3" ]; then
+            PARTITION="partitions-ota-8mb.csv"
+          else
+            PARTITION="partitions-ota-4mb.csv"
+          fi
+          
+          make BOARD=${{ matrix.board }} clean || true
+          
+          make BOARD=${{ matrix.board }} \
+            FROZEN_MANIFEST="$(pwd)/boards/manifest_tansuodou.py" \
+            PART_SRC="$PARTITION" \
+            CFLAGS_EXTRA="-Wno-error" \
+            -j$(nproc) 2>&1 | tee build.log
+          
+          if [ ! -f "build-${{ matrix.board }}/firmware.bin" ]; then
+            echo "Build failed!"
+            tail -n 100 build.log
+            exit 1
+          fi
+          
+          SIZE=$(stat -c%s "build-${{ matrix.board }}/firmware.bin")
+          SIZE_MB=$(echo "scale=2; $SIZE / 1024 / 1024" | bc)
+          echo "Firmware size: ${SIZE_MB}MB"
+      
+      - name: Extract Version
+        id: version
+        run: |
+          VERSION=$(grep 'FIRMWARE_VERSION = ' frozen/boot.py | sed 's/.*"\(.*\)".*/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Firmware version: $VERSION"
+      
+      - name: Save Firmware
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/binaries
+          
+          FILENAME="tansuodou-${{ matrix.board }}-v${{ steps.version.outputs.version }}.bin"
+          
+          cp ~/micropython/ports/esp32/build-${{ matrix.board }}/firmware.bin \
+            $GITHUB_WORKSPACE/binaries/$FILENAME
+          
+          echo "Saved: $FILENAME"
+          ls -lh $GITHUB_WORKSPACE/binaries/$FILENAME
+      
+      - name: Commit Firmware
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          FILENAME="tansuodou-${{ matrix.board }}-v${{ steps.version.outputs.version }}.bin"
+          git add binaries/$FILENAME
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "build: ${{ matrix.board }} v${{ steps.version.outputs.version }}"
+            git pull --rebase origin master
+            git push origin master
+          fi
