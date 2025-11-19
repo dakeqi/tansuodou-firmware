@@ -7,8 +7,8 @@ import json
 import time
 
 # 固件版本信息
-FIRMWARE_VERSION = "3.0.4"
-FIRMWARE_BUILD = "20251119-v3.6"
+FIRMWARE_VERSION = "3.0.5"
+FIRMWARE_BUILD = "20251119-v3.7"
 FIRMWARE_NAME = "搭豆物联 TansuoDou IoT Platform"
 
 print("\n" + "="*50)

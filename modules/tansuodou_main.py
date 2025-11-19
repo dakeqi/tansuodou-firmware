@@ -10,7 +10,6 @@ import time
 import _thread
 import errno
 import sys
-import io
 
 try:
     import ujson as json
@@ -28,8 +27,8 @@ except:
     print("⚠️  OTA HTTP服务器模块未找到")
 
 # 固件版本信息（与boot.py保持一致）
-FIRMWARE_VERSION = "3.0.4"
-FIRMWARE_BUILD = "20251119-v3.6"
+FIRMWARE_VERSION = "3.0.5"
+FIRMWARE_BUILD = "20251119-v3.7"
 
 # 云端API地址配置
 # 生产环境：使用云托管公网地址（默认）
@@ -627,29 +626,34 @@ class TansuodouDevice:
                         # 其他命令当作 Python 代码执行
                         if cmd and not cmd.startswith('get_') and not cmd.startswith('reset_') and cmd != 'ctrl_c' and cmd != 'ctrl_d':
                             try:
-                                # 捕获 print 输出：重定向 stdout
-                                # sys 和 io 已在模块顶部导入
+                                # 捕获 print 输出：Monkey Patch builtins.print
+                                output_lines = []
                                 
-                                # 创建字符串缓冲区捕获输出
-                                output_buffer = io.StringIO()
-                                original_stdout = sys.stdout
-                                sys.stdout = output_buffer
+                                # 保存原始print函数
+                                import builtins
+                                original_print = builtins.print
+                                
+                                # 定义自定义print函数来捕获输出
+                                def custom_print(*args, **kwargs):
+                                    # 将参数转换为字符串并添加到输出列表
+                                    sep = kwargs.get('sep', ' ')
+                                    output_lines.append(sep.join(str(arg) for arg in args))
+                                
+                                # 替换内置print函数
+                                builtins.print = custom_print
                                 
                                 try:
                                     # 执行 Python 代码（使用全局环境，确保模块可用）
                                     exec(cmd, globals())
                                     
-                                    # 恢复 stdout
-                                    sys.stdout = original_stdout
-                                    
                                     # 获取输出内容
-                                    output = output_buffer.getvalue()
+                                    output = '\n'.join(output_lines) if output_lines else ''
                                     
                                     # 如果有输出，返回输出内容；否则返回OK
                                     if output:
                                         self.send_websocket_message(conn, json.dumps({
                                             'type': 'output',
-                                            'data': output.rstrip()  # 去除末尾换行
+                                            'data': output
                                         }))
                                     else:
                                         self.send_websocket_message(conn, json.dumps({
@@ -657,9 +661,8 @@ class TansuodouDevice:
                                             'data': 'OK'
                                         }))
                                 finally:
-                                    # 确保 stdout始终恢复
-                                    sys.stdout = original_stdout
-                                    output_buffer.close()
+                                    # 确保 print 始终恢复
+                                    builtins.print = original_print
                                     
                             except Exception as e:
                                 self.send_websocket_message(conn, json.dumps({
