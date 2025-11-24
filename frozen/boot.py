@@ -24,8 +24,8 @@ def flush_stdout():
         pass
 
 # 搅豆物联固件 - MicroPython v1.22.0 + ESP-IDF v5.0.4（原始成功配置）
-FIRMWARE_VERSION = "3.0.6"
-FIRMWARE_BUILD = "20251124-02"  # WebSocket日志静默优化：忽略ETIMEDOUT
+FIRMWARE_VERSION = "3.0.7"
+FIRMWARE_BUILD = "20251124-03"  # 启动日志优化：配置成功后直接启动
 FIRMWARE_NAME = "搅豆物联 TansuoDou IoT Platform"
 
 print("\n" + "="*50)
@@ -439,20 +439,24 @@ def check_wifi_config():
     try:
         with open('/wifi_config.json', 'r') as f:
             config = json.load(f)
-            # ...
+            # 验证配置的有效性
             if config.get('ssid') and isinstance(config['ssid'], str) and len(config['ssid']) > 0:
-                # ...
+                # 添加缺失的必要字段
                 if 'password' not in config:
                     config['password'] = ''
-                # ...
+                # 添加设备名称
                 if 'device_name' not in config:
                     config['device_name'] = get_device_id()
+                print("📝 配置文件验证成功")
                 return config
+            else:
+                print("⚠️  配置文件中SSID无效或为空")
+                return None
     except OSError as e:
-        # ...
-        print("📄 配置文件不存在或无法读取")
+        # 文件不存在或无法读取（静默处理，不打印错误）
+        pass
     except ValueError as e:
-        # ...
+        # JSON格式错误
         print("⚠️  配置文件格式错误: " + str(e))
     except Exception as e:
         print("⚠️  读取配置时出错: " + str(e))
@@ -654,17 +658,18 @@ def main():
     if config is None:
         # 没有配置，无限等待接收串口配置
         print("\n⚠️  未找到有效的WiFi配置")
-        print("📶 无限等待接收串口配置命令...")
+        print("📶 准备进入串口配置监听模式...")
         print("💡 适合青少年使用，没有时间压力\n")
         
         config = wait_for_serial_config()
         
         # 收到配置后会自动重启，下面的代码不会执行
     else:
-        # 有配置，直接启动
+        # 有配置，直接启动（不显示配置等待信息）
         print("\n✅ 发现WiFi配置")
         print("   SSID: " + config['ssid'])
         print("   设备名: " + config.get('device_name', device_id))
+        print("   🚀 启动设备主程序...")
         start_normal_mode(config)
 
 # ...
