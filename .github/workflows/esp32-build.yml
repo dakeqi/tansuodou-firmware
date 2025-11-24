@@ -1,4 +1,4 @@
-﻿name: Build ESP32 Firmware
+﻿﻿name: Build ESP32 Firmware
 on:
   push:
     paths:
@@ -70,17 +70,74 @@ jobs:
       - name: Prepare Firmware Files
         run: |
           echo "=== Preparing TansuoDou Firmware ==="
+          
+          # 复制Frozen模块（所有设备共用）
           mkdir -p ~/micropython/ports/esp32/tansuodou_frozen
           cp frozen/*.py ~/micropython/ports/esp32/tansuodou_frozen/
-          echo "Frozen modules copied"
+          echo "✅ Frozen modules copied"
+          
+          # 创建模块目录
           mkdir -p ~/micropython/ports/esp32/modules
-          cp modules/*.py ~/micropython/ports/esp32/modules/
-          echo "Filesystem modules copied"
+          
+          # 🔥 根据设备类型复制不同的模块
+          echo "📦 Copying modules for ${{ matrix.board }}..."
+          
+          # 基础模块（所有设备）
+          cp modules/tansuodou_main.py ~/micropython/ports/esp32/modules/
+          cp modules/ota_http_server.py ~/micropython/ports/esp32/modules/
+          echo "  ✅ Base modules (tansuodou_main, ota_http_server)"
+          
+          # ESP32特殊功能（ESP32/S2/S3支持触摸，ESP32支持霍尔，ESP32/S2支持DAC）
+          if [[ "${{ matrix.board }}" == "ESP32_GENERIC" ]] || \
+             [[ "${{ matrix.board }}" == "ESP32_GENERIC_S2" ]] || \
+             [[ "${{ matrix.board }}" == "ESP32_GENERIC_S3" ]]; then
+            cp modules/esp32_special.py ~/micropython/ports/esp32/modules/
+            echo "  ✅ ESP32 special features (touch, hall, DAC)"
+          fi
+          
+          # 蓝牙BLE（ESP32/S3/C3支持）
+          if [[ "${{ matrix.board }}" == "ESP32_GENERIC" ]] || \
+             [[ "${{ matrix.board }}" == "ESP32_GENERIC_S3" ]] || \
+             [[ "${{ matrix.board }}" == "ESP32_GENERIC_C3" ]]; then
+            cp modules/ble.py ~/micropython/ports/esp32/modules/
+            echo "  ✅ Bluetooth BLE support"
+          fi
+          
+          # USB HID（仅S2/S3支持）
+          if [[ "${{ matrix.board }}" == "ESP32_GENERIC_S2" ]] || \
+             [[ "${{ matrix.board }}" == "ESP32_GENERIC_S3" ]]; then
+            cp modules/usb_hid_helper.py ~/micropython/ports/esp32/modules/
+            echo "  ✅ USB HID support (keyboard, mouse)"
+          fi
+          
+          # 摄像头（仅S3支持）
+          if [[ "${{ matrix.board }}" == "ESP32_GENERIC_S3" ]]; then
+            cp modules/camera_helper.py ~/micropython/ports/esp32/modules/
+            echo "  ✅ Camera support"
+          fi
+          
+          # AI推理（仅S3支持）
+          if [[ "${{ matrix.board }}" == "ESP32_GENERIC_S3" ]]; then
+            cp modules/ai_helper.py ~/micropython/ports/esp32/modules/
+            echo "  ✅ AI inference support (TFLite)"
+          fi
+          
+          # 智能家居高级功能（仅S3支持）
+          if [[ "${{ matrix.board }}" == "ESP32_GENERIC_S3" ]]; then
+            cp modules/ha_advanced.py ~/micropython/ports/esp32/modules/
+            echo "  ✅ Home Assistant advanced features"
+          fi
+          
+          echo "📊 Module count for ${{ matrix.board }}:"
+          ls -la ~/micropython/ports/esp32/modules/*.py | wc -l
+          
           mkdir -p ~/micropython/ports/esp32/modules/user_code/{lib,examples}
           cat > ~/micropython/ports/esp32/modules/user_code/examples/hello.py << 'EOF'
           print('Hello from TansuoDou IoT Platform!')
           EOF
+          
           cp partitions/*.csv ~/micropython/ports/esp32/
+          
           cat > ~/micropython/ports/esp32/boards/manifest_tansuodou.py << 'EOF'
           include("$(PORT_DIR)/boards/manifest.py")
           freeze("$(PORT_DIR)/tansuodou_frozen", (
@@ -89,7 +146,8 @@ jobs:
               "ide_helper.py",
           ))
           EOF
-          echo "=== Preparation Complete ==="
+          
+          echo "=== ✅ Preparation Complete ==="
       - name: Build Firmware
         run: |
           cd ~/micropython/ports/esp32
