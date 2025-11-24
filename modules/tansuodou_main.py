@@ -9,7 +9,6 @@ import ubinascii
 import time
 import _thread
 import errno
-import sys
 
 try:
     import ujson as json
@@ -26,9 +25,28 @@ try:
 except:
     print("⚠️  OTA HTTP服务器模块未找到")
 
-# 固件版本信息（与boot.py保持一致）
-FIRMWARE_VERSION = "3.0.5"
-FIRMWARE_BUILD = "20251119-v3.7"
+try:
+    import device_web_server
+except:
+    print("⚠️  设备Web服务器模块未找到")
+
+# MQTT功能已移除（备份到 backup/mqtt-archive-20250120/）
+
+# 全局变量：用户代码执行控制
+user_code_thread = None  # 当前运行的用户代码线程ID
+stop_user_code_flag = False  # 停止标志
+main_py_running = False  # main.py 是否正在运行
+
+# 从 boot.py 导入版本信息（延迟导入）
+try:
+    import boot
+    FIRMWARE_VERSION = boot.FIRMWARE_VERSION
+    FIRMWARE_BUILD = boot.FIRMWARE_BUILD
+    print("✅ 版本信息导入成功: v" + FIRMWARE_VERSION)
+except Exception as e:
+    print("⚠️  版本信息导入失败: " + str(e))
+    FIRMWARE_VERSION = "3.0.4"
+    FIRMWARE_BUILD = "20251119-v3"
 
 # 云端API地址配置
 # 生产环境：使用云托管公网地址（默认）
@@ -48,6 +66,8 @@ class TansuodouDevice:
         self.ws_clients = []
         self.running = True
         self.ota_server = None  # OTA HTTP 服务器
+        
+        # MQTT组件已移除
         
     def get_device_id(self):
         """Get unique device ID"""
@@ -99,6 +119,7 @@ class TansuodouDevice:
                     last_status = status
                 
                 # MicroPython不支持end参数，改用sys.stdout.write
+                import sys
                 sys.stdout.write('.')
                 time.sleep(1)
                 timeout -= 1
@@ -380,7 +401,24 @@ class TansuodouDevice:
                 print("❌ OTA 服务器线程错误: " + str(e))
                 break
     
-    # ...
+    def start_device_web_server(self):
+        """启动设备 Web 控制服务器（离线界面）"""
+        try:
+            if 'device_web_server' not in globals():
+                print("   ⏸️  设备Web服务器模块未找到")
+                return
+            
+            print("   ✅ 设备Web服务器启动中...")
+            print("   🌐 本地访问: http://" + str(self.ip))
+            print("   📊 功能: 传感器数据 + 开关控制")
+            
+            # 在独立线程中启动 Web 服务器
+            _thread.start_new_thread(device_web_server.start, ())
+            print("   ✅ 设备Web服务器已启动")
+            
+        except Exception as e:
+            print("   ❌ 设备Web服务器错误: " + str(e))
+    
     def start_websocket_server(self):
         """启动WebSocket服务器（增强版：连接池管理）"""
         print("\n🔌 启动WebSocket服务器...")
@@ -391,36 +429,45 @@ class TansuodouDevice:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.settimeout(1.0)  # 设置accept超时，避免阻塞
         s.bind(addr)
-        s.listen(5)
+        s.listen(10)  # 增加并发连接数：5 → 10
         
         print("✅ WebSocket服务器已启动")
         print("   连接地址: ws://" + str(self.ip) + ":" + str(WS_PORT))
-        print("   最大连接数: 5")
+        print("   最大连接数: 10")
         
+        error_count = 0
         while self.running:
             try:
                 try:
                     conn, addr = s.accept()
                 except OSError as e:
-                    # 静默处理超时错误,避免刷屏
+                    # MicroPython中安全地处理超时错误
                     err = e.errno if hasattr(e, 'errno') else (e.args[0] if e.args else None)
-                    if err == errno.EAGAIN or err == errno.ETIMEDOUT or err == 11:
-                        time.sleep(0.1)
+                    # 检查常见的非阻塞错误码
+                    if err == errno.EAGAIN or err == errno.ETIMEDOUT or err == 11:  # 11 = EAGAIN/EWOULDBLOCK
+                        time.sleep(0.05)
                         continue
-                    # 其他错误也静默处理,只记录首次
-                    time.sleep(0.2)
-                    continue
+                    raise
                 
-                conn.settimeout(30.0)
+                conn.settimeout(30.0)  # 设置连接超时30秒
                 print("\n🔗 新客户端连接: " + str(addr))
+                print("   当前连接数: " + str(len(self.ws_clients)))
                 
                 # 启动独立线程处理客户端
                 _thread.start_new_thread(self.handle_websocket_client, (conn, addr))
+                error_count = 0  # 有新连接时重置错误计数
                 
-            except OSError:
-                # 静默处理所有Socket错误
+            except OSError as e:
+                # 处理超时和其他OSError
+                err = e.errno if hasattr(e, 'errno') else (e.args[0] if e.args else None)
+                # 检查常见的非阻塞错误码
+                if err == errno.EAGAIN or err == errno.ETIMEDOUT or err == 11:  # 11 = EAGAIN/EWOULDBLOCK
+                    continue
+                # 其他OSError
+                error_count += 1
+                if error_count <= 3 or error_count % 30 == 0:
+                    print("❌ Socket错误: " + str(e))
                 time.sleep(0.2)
-                continue
     
     def handle_websocket_client(self, conn, addr):
         """处理WebSocket客户端连接（增强版：心跳检测+异常处理）"""
@@ -429,7 +476,7 @@ class TansuodouDevice:
         
         try:
             # 接收HTTP握手请求
-            request = conn.recv(1024).decode('utf-8')
+            request = conn.recv(4096).decode('utf-8')  # 增加缓冲区支持更大的请求头
             
             # 检查WebSocket升级请求
             if 'Upgrade: websocket' in request:
@@ -445,18 +492,21 @@ class TansuodouDevice:
                     response = self.create_websocket_handshake(key)
                     conn.send(response.encode())
                     
+                    print("✅ WebSocket连接建立: " + str(addr))
+                    
                     # 添加到客户端列表
                     self.ws_clients.append(conn)
-                    print("✅ WebSocket连接建立")
+                    print("   活跃连接数: " + str(len(self.ws_clients)))
                     
                     # 主循环：接收和处理消息
                     while client_active and self.running:
                         try:
                             # 设置非阻塞超时
                             conn.settimeout(0.5)
-                            data = conn.recv(1024)
+                            data = conn.recv(4096)  # 增加缓冲区：1024 → 4096 字节，支持大代码块传输
                             
                             if not data:
+                                print("   客户端关闭连接")
                                 break
                             
                             # 解析WebSocket帧
@@ -468,25 +518,29 @@ class TansuodouDevice:
                                 self.handle_message(conn, message)
                                 last_ping_time = time.time()  # 更新活跃时间
                                 
-                        except OSError:
-                            # 超时或EAGAIN错误,检查心跳(静默)
+                        except OSError as e:
+                            # 超时或EAGAIN错误，检查心跳
                             if time.time() - last_ping_time > 60:
+                                print("   ⏱️ 客户端超时（60秒无活动）")
                                 client_active = False
                                 break
                             time.sleep(0.01)
                             continue
-                        except Exception:
-                            # 静默处理消息错误
+                        except Exception as e:
+                            print("❌ 消息处理错误: " + str(e))
                             client_active = False
                             break
                     
                     # 清理：从客户端列表移除
                     if conn in self.ws_clients:
                         self.ws_clients.remove(conn)
-                    print("🔌 客户端断开")
+                        print("   已移除客户端，剩余: " + str(len(self.ws_clients)))
+                    
+                    print("🔌 客户端断开: " + str(addr))
             
-        except Exception:
-            # 静默处理WebSocket错误
+        except Exception as e:
+            print("❌ WebSocket错误: " + str(e))
+            # 确保从客户端列表移除
             if conn in self.ws_clients:
                 self.ws_clients.remove(conn)
         finally:
@@ -549,9 +603,9 @@ class TansuodouDevice:
             for i, byte in enumerate(payload):
                 decoded.append(byte ^ mask[i % 4])
             
-            return decoded.decode('utf-8', 'ignore')
-        except Exception:
-            # 静默处理帧解析错误
+            return decoded.decode('utf-8', 'ignore')  # 忽略解码错误
+        except Exception as e:
+            print("⚠️  WebSocket帧解析失败: " + str(e))
             return None
     
     def handle_message(self, conn, message):
@@ -570,114 +624,49 @@ class TansuodouDevice:
             elif msg_type == 'execute':
                 # 处理两种格式: {"command": "..."} 或直接字符串
                 payload = data.get('data', {})
+                print("🔍 调试: payload 类型 =", type(payload), ", 值 =", str(payload)[:100])
                 
-                if isinstance(payload, dict):
+                # 检查是否是文件上传模式（有 mode 字段）
+                if isinstance(payload, dict) and 'mode' in payload:
+                    upload_mode = payload.get('mode')  # 'temporary' 或 'persistent'
                     cmd = payload.get('command', '')
-                else:
-                    cmd = str(payload) if payload else ''
-                
-                try:
-                    # ...
-                    if cmd == 'get_info':
-                        result = {
-                            'deviceId': self.device_id,
-                            'ip': self.ip,
-                            'rssi': self.wlan.status('rssi') if self.wlan else None,
-                            'uptime': time.time()
-                        }
-                        self.send_websocket_message(conn, json.dumps({
-                            'type': 'output',
-                            'data': result
-                        }))
-                    elif cmd == 'reboot':
-                        self.send_websocket_message(conn, json.dumps({
-                            'type': 'output',
-                            'data': '✅ 设备将在3秒后重启'
-                        }))
-                        time.sleep(3)
-                        machine.reset()
-                    elif cmd == 'reset_config':
-                        import os
-                        try:
-                            os.remove('/wifi_config.json')
-                            self.send_websocket_message(conn, json.dumps({
-                                'type': 'output',
-                                'data': '✅ 配置已重置，设备将重启'
-                            }))
-                            time.sleep(2)
-                            machine.reset()
-                        except:
-                            pass
-                    elif cmd == 'ctrl_c':
-                        # Ctrl+C: 中断当前程序(WiFi模式仅模拟)
-                        self.send_websocket_message(conn, json.dumps({
-                            'type': 'output',
-                            'data': '\n[收到 Ctrl+C 中断信号 - 这是模拟信号，设备将继续运行]\n>>> '
-                        }))
-                    elif cmd == 'ctrl_d':
-                        # Ctrl+D: 软重启MicroPython
-                        self.send_websocket_message(conn, json.dumps({
-                            'type': 'output',
-                            'data': '\n[收到 Ctrl+D 软重启信号 - 设备将重启]\n'
-                        }))
-                        time.sleep(2)
-                        machine.reset()
+                    filename = payload.get('filename', 'main.py')  # 默认 main.py
+                    
+                    if upload_mode == 'persistent':
+                        # 模式1：持久化模式 - 保存为文件，开机自动运行
+                        self.save_persistent_code(cmd, filename, conn)
+                    elif upload_mode == 'temporary':
+                        # 模式2：瘘时模式 - 直接执行，不保存
+                        self.execute_temporary_code(cmd, conn)
                     else:
-                        # 其他命令当作 Python 代码执行
-                        if cmd and not cmd.startswith('get_') and not cmd.startswith('reset_') and cmd != 'ctrl_c' and cmd != 'ctrl_d':
-                            try:
-                                # 捕获 print 输出：Monkey Patch builtins.print
-                                output_lines = []
-                                
-                                # 保存原始print函数
-                                import builtins
-                                original_print = builtins.print
-                                
-                                # 定义自定义print函数来捕获输出
-                                def custom_print(*args, **kwargs):
-                                    # 将参数转换为字符串并添加到输出列表
-                                    sep = kwargs.get('sep', ' ')
-                                    output_lines.append(sep.join(str(arg) for arg in args))
-                                
-                                # 替换内置print函数
-                                builtins.print = custom_print
-                                
-                                try:
-                                    # 执行 Python 代码（使用全局环境，确保模块可用）
-                                    exec(cmd, globals())
-                                    
-                                    # 获取输出内容
-                                    output = '\n'.join(output_lines) if output_lines else ''
-                                    
-                                    # 如果有输出，返回输出内容；否则返回OK
-                                    if output:
-                                        self.send_websocket_message(conn, json.dumps({
-                                            'type': 'output',
-                                            'data': output
-                                        }))
-                                    else:
-                                        self.send_websocket_message(conn, json.dumps({
-                                            'type': 'output',
-                                            'data': 'OK'
-                                        }))
-                                finally:
-                                    # 确保 print 始终恢复
-                                    builtins.print = original_print
-                                    
-                            except Exception as e:
-                                self.send_websocket_message(conn, json.dumps({
-                                    'type': 'error',
-                                    'data': str(e)
-                                }))
-                        else:
-                            self.send_websocket_message(conn, json.dumps({
-                                'type': 'error',
-                                'data': '不支持的命令: ' + cmd
-                            }))
-                except Exception as e:
+                        self.send_websocket_message(conn, json.dumps({
+                            'type': 'error',
+                            'data': '未知的上传模式: ' + upload_mode
+                        }))
+                else:
+                    # 兼容旧格式：默认为瘘时模式
+                    if isinstance(payload, dict):
+                        cmd = payload.get('command', '')
+                    else:
+                        cmd = str(payload) if payload else ''
+                    
+                    self.execute_temporary_code(cmd, conn)
+                    
+            elif msg_type == 'file_operation':
+                # 文件系统操作：列表、删除、读取
+                operation = data.get('operation')  # 'list', 'delete', 'read'
+                path = data.get('path', '/')
+                
+                if operation == 'list':
+                    self.list_files(path, conn)
+                elif operation == 'delete':
+                    self.delete_file(path, conn)
+                elif operation == 'read':
+                    self.read_file(path, conn)
+                else:
                     self.send_websocket_message(conn, json.dumps({
                         'type': 'error',
-                        'data': str(e)
+                        'data': '不支持的文件操作: ' + operation
                     }))
                     
             elif msg_type == 'info':
@@ -745,9 +734,313 @@ class TansuodouDevice:
                         'data': 'OTA失败: ' + str(e)
                     }))
                 
-        except Exception:
-            # 静默处理消息解析错误
+        except Exception as e:
+            print("❌ 消息处理失败: " + str(e))
+    
+    def stop_user_code(self):
+        """停止当前正在运行的用户代码（包括WebSocket临时程序和main.py）"""
+        global stop_user_code_flag, user_code_thread, main_py_running
+        
+        # 1. 停止WebSocket启动的临时程序
+        if user_code_thread is not None:
+            print("⏹️  停止WebSocket临时程序...")
+            stop_user_code_flag = True
+            time.sleep(0.3)  # 等待线程检查标志并退出
+            user_code_thread = None
+        
+        # 2. 停止开机自动运行的 main.py
+        if main_py_running:
+            print("⏹️  检测到 main.py 正在运行，尝试停止...")
+            try:
+                # 尝试删除 main 模块的引用，阻止其继续执行
+                import sys
+                if 'main' in sys.modules:
+                    print("   ℹ️  发现 main 模块已加载")
+                    # 注意：删除模块引用无法停止已运行的线程
+                    # 但可以防止重复 import
+                    del sys.modules['main']
+                
+                # 设置停止标志（如果 main.py 使用了 should_stop()）
+                stop_user_code_flag = True
+                
+                # 标记为未运行
+                main_py_running = False
+                
+                print("   ⚠️  注意：main.py 如果有 while True 循环且未检查 should_stop()，可能无法完全停止")
+                print("   💡 建议：如需彻底停止，请删除 main.py 并重启设备")
+                
+            except Exception as e:
+                print("⚠️  停止 main.py 失败: " + str(e))
+        
+        # 3. 清理内存
+        try:
+            import gc
+            gc.collect()
+        except:
             pass
+    
+    def execute_user_code_in_thread(self, code, conn):
+        """在独立线程中执行用户代码（支持长时间运行和 while True）"""
+        global stop_user_code_flag
+        
+        try:
+            print("🚀 用户代码线程已启动")
+            
+            # 创建隔离的命名空间，避免污染全局环境
+            namespace = globals().copy()
+            namespace['__name__'] = '__main__'
+            
+            # 注入停止检查函数（用户可在代码中使用）
+            namespace['should_stop'] = lambda: stop_user_code_flag
+            
+            # 执行用户代码
+            exec(code, namespace)
+            
+            print("✅ 用户代码执行完成")
+            
+        except Exception as e:
+            print("❌ 用户代码异常: " + str(e))
+            
+            # 发送错误信息到前端
+            try:
+                import sys
+                import io
+                error_io = io.StringIO()
+                sys.print_exception(e, error_io)
+                error_msg = error_io.getvalue()
+                error_io.close()
+                
+                self.send_websocket_message(conn, json.dumps({
+                    'type': 'error',
+                    'data': '线程异常: ' + (error_msg if error_msg else str(e))
+                })) 
+            except:
+                pass
+        
+        finally:
+            # 清理
+            try:
+                import gc
+                gc.collect()
+            except:
+                pass
+            
+            print("📍 用户代码线程已退出")
+    
+    def execute_temporary_code(self, code, conn):
+        """临时执行模式：直接执行代码，不保存文件"""
+        print("⚡ [立即运行] 执行代码 (长度:" + str(len(code)) + ")")
+        print("   下次运行时会自动停止当前程序")
+        
+        # 先停止旧程序
+        self.stop_user_code()
+        
+        try:
+            import sys
+            import io
+            
+            # 创建输出缓冲区
+            output_buffer = io.StringIO()
+            error_buffer = io.StringIO()
+            original_stdout = sys.stdout
+            original_stderr = sys.stderr
+            sys.stdout = output_buffer
+            sys.stderr = error_buffer
+            
+            try:
+                # 检测无限循环
+                has_infinite_loop = 'while True' in code or 'while 1' in code
+                
+                if has_infinite_loop:
+                    print("⚠️  检测到无限循环，在独立线程中运行...")
+                    
+                    # 恢复 stdout/stderr
+                    sys.stdout = original_stdout
+                    sys.stderr = original_stderr
+                    output_buffer.close()
+                    error_buffer.close()
+                    
+                    # 启动新线程
+                    global user_code_thread, stop_user_code_flag
+                    stop_user_code_flag = False
+                    user_code_thread = _thread.start_new_thread(
+                        self.execute_user_code_in_thread, 
+                        (code, conn)
+                    )
+                    
+                    self.send_websocket_message(conn, json.dumps({
+                        'type': 'output',
+                        'data': '✅ [立即运行] 程序已在后台启动\n发送 Ctrl+C 可停止程序'
+                    }))
+                else:
+                    # 短代码直接执行
+                    exec(code, globals())
+                    
+                    sys.stdout = original_stdout
+                    sys.stderr = original_stderr
+                    
+                    output = output_buffer.getvalue()
+                    error_output = error_buffer.getvalue()
+                    
+                    if error_output:
+                        self.send_websocket_message(conn, json.dumps({
+                            'type': 'error',
+                            'data': error_output.rstrip()
+                        }))
+                    elif output:
+                        self.send_websocket_message(conn, json.dumps({
+                            'type': 'output',
+                            'data': output.rstrip()
+                        }))
+                    else:
+                        self.send_websocket_message(conn, json.dumps({
+                            'type': 'output',
+                            'data': '✅ [立即运行] 执行成功'
+                        }))
+            finally:
+                if not has_infinite_loop:
+                    sys.stdout = original_stdout
+                    sys.stderr = original_stderr
+                    output_buffer.close()
+                    error_buffer.close()
+                    
+        except Exception as e:
+            import sys
+            import io
+            error_io = io.StringIO()
+            sys.print_exception(e, error_io)
+            error_msg = error_io.getvalue()
+            error_io.close()
+            
+            self.send_websocket_message(conn, json.dumps({
+                'type': 'error',
+                'data': error_msg if error_msg else str(e)
+            }))
+    
+    def save_persistent_code(self, code, filename, conn):
+        """持久化模式：保存代码到文件系统，开机自动运行"""
+        print("💾 [保存到设备] 保存代码到文件: " + filename)
+        
+        try:
+            # 先停止当前运行的 main.py（如果有）
+            global main_py_running
+            if main_py_running:
+                print("   ⏹️  停止当前运行的 main.py...")
+                self.stop_user_code()
+                main_py_running = False
+            
+            # 保存代码到文件
+            with open('/' + filename, 'w') as f:
+                f.write(code)
+            
+            print("   ✅ 文件已保存: /" + filename)
+            
+            # 如果是 main.py，询问是否立即运行
+            if filename == 'main.py':
+                self.send_websocket_message(conn, json.dumps({
+                    'type': 'output',
+                    'data': '✅ [保存到设备] 代码已永久保存 (main.py)\n' +
+                            '💾 开机自动运行：设备重启后自动执行\n' +
+                            '🔄 发送 reboot 命令可重启设备'
+                }))
+            else:
+                self.send_websocket_message(conn, json.dumps({
+                    'type': 'output',
+                    'data': '✅ [保存到设备] 代码已保存为 ' + filename + '\n' +
+                            '💡 使用 import ' + filename.replace('.py', '') + ' 加载此模块'
+                }))
+            
+        except Exception as e:
+            import sys
+            import io
+            error_io = io.StringIO()
+            sys.print_exception(e, error_io)
+            error_msg = error_io.getvalue()
+            error_io.close()
+            
+            self.send_websocket_message(conn, json.dumps({
+                'type': 'error',
+                'data': '保存文件失败: ' + (error_msg if error_msg else str(e))
+            }))
+    
+    def list_files(self, path, conn):
+        """列出文件系统中的文件"""
+        try:
+            import os
+            files = os.listdir(path)
+            
+            file_list = []
+            for f in files:
+                try:
+                    stat = os.stat(path + '/' + f if path != '/' else '/' + f)
+                    file_list.append({
+                        'name': f,
+                        'size': stat[6],  # 文件大小
+                        'type': 'dir' if stat[0] & 0x4000 else 'file'
+                    })
+                except:
+                    file_list.append({
+                        'name': f,
+                        'size': 0,
+                        'type': 'unknown'
+                    })
+            
+            self.send_websocket_message(conn, json.dumps({
+                'type': 'file_list',
+                'data': {
+                    'path': path,
+                    'files': file_list
+                }
+            }))
+            
+        except Exception as e:
+            self.send_websocket_message(conn, json.dumps({
+                'type': 'error',
+                'data': '列出文件失败: ' + str(e)
+            }))
+    
+    def delete_file(self, path, conn):
+        """删除文件"""
+        try:
+            import os
+            os.remove(path)
+            
+            self.send_websocket_message(conn, json.dumps({
+                'type': 'output',
+                'data': '✅ 文件已删除: ' + path
+            }))
+            
+            # 如果删除的是 main.py，标记为未运行
+            if path == '/main.py':
+                global main_py_running
+                main_py_running = False
+                print("   📌 main.py 已删除，开机将不再自动运行")
+            
+        except Exception as e:
+            self.send_websocket_message(conn, json.dumps({
+                'type': 'error',
+                'data': '删除文件失败: ' + str(e)
+            }))
+    
+    def read_file(self, path, conn):
+        """读取文件内容"""
+        try:
+            with open(path, 'r') as f:
+                content = f.read()
+            
+            self.send_websocket_message(conn, json.dumps({
+                'type': 'file_content',
+                'data': {
+                    'path': path,
+                    'content': content
+                }
+            }))
+            
+        except Exception as e:
+            self.send_websocket_message(conn, json.dumps({
+                'type': 'error',
+                'data': '读取文件失败: ' + str(e)
+            }))
     
     def send_websocket_message(self, conn, message):
         """发送WebSocket消息（增强版：错误处理+超时）"""
@@ -780,12 +1073,14 @@ class TansuodouDevice:
             conn.send(bytes(frame))
             return True
             
-        except OSError:
-            # 静默处理发送失败
+        except OSError as e:
+            print("❌ 发送失败(OSError): " + str(e))
+            # 连接已断开，从列表移除
             if conn in self.ws_clients:
                 self.ws_clients.remove(conn)
             return False
-        except Exception:
+        except Exception as e:
+            print("❌ 发送消息失败: " + str(e))
             return False
     
     # ...
@@ -797,6 +1092,34 @@ class TansuodouDevice:
             print("✅ mDNS广播已启动: " + str(self.device_name) + ".local")
         except:
             print("⚠️  mDNS不可用（跳过）")
+    
+    def check_main_py_status(self):
+        """检测 main.py 是否存在并标记运行状态"""
+        try:
+            import os
+            global main_py_running
+            
+            # 检查 main.py 文件是否存在
+            files = os.listdir('/')
+            if 'main.py' in files:
+                print("💾 发现 main.py 文件")
+                
+                # 检查 main 模块是否已加载（说明开机已自动运行）
+                import sys
+                if 'main' in sys.modules:
+                    main_py_running = True
+                    print("✅ main.py 已在开机时自动运行")
+                    print("💡 提示：使用 '立即运行' 时会自动停止 main.py")
+                else:
+                    print("ℹ️  main.py 存在但未运行（可能启动失败）")
+                    main_py_running = False
+            else:
+                print("ℹ️  未发现 main.py 文件")
+                main_py_running = False
+                
+        except Exception as e:
+            print("⚠️  检测 main.py 状态失败: " + str(e))
+            main_py_running = False
     
     # ...
     def run(self):
@@ -852,9 +1175,19 @@ class TansuodouDevice:
         
         print("="*50 + "\n")
         
+        # 检测 main.py 是否存在并运行
+        print("\n[额外服务] 检测用户程序")
+        self.check_main_py_status()
+        
         # 启动 OTA HTTP 服务器
         print("\n[额外服务] OTA更新服务")
         self.start_ota_http_server()
+        
+        # 启动设备 Web 服务器（离线控制界面）
+        print("\n[额外服务] 设备Web控制界面")
+        self.start_device_web_server()
+        
+        # MQTT服务已移除
         
         # 启动WebSocket服务器
         self.start_websocket_server()

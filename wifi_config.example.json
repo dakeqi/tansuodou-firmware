@@ -1,0 +1,9 @@
+{
+  "ssid": "YourWiFiSSID",
+  "password": "YourWiFiPassword",
+  "api_base": "https://tansuodou.com/api",
+  "user_id": "your_user_id",
+  "device_name": "TSD-XXXXXXXX",
+  "mqtt_broker": "192.168.1.100",
+  "mqtt_port": 1883
+}
