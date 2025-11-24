@@ -24,8 +24,8 @@ def flush_stdout():
         pass
 
 # 搅豆物联固件 - MicroPython v1.22.0 + ESP-IDF v5.0.4（原始成功配置）
-FIRMWARE_VERSION = "3.0.5"
-FIRMWARE_BUILD = "20251124-01"  # 青少年友好界面：立即运行/保存到设备
+FIRMWARE_VERSION = "3.0.6"
+FIRMWARE_BUILD = "20251124-02"  # WebSocket日志静默优化：忽略ETIMEDOUT
 FIRMWARE_NAME = "搅豆物联 TansuoDou IoT Platform"
 
 print("\n" + "="*50)

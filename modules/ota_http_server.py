@@ -120,8 +120,10 @@ class OTAHTTPServer:
                 self.send_response(conn, 404, {'error': 'Not found'})
             
         except OSError as e:
-            # 超时或无连接，正常情况
-            if e.args[0] != 11:  # EAGAIN
+            # 超时或无连接，正常情况（静默处理）
+            err = e.args[0] if e.args else None
+            # 忽略 EAGAIN(11) 和 ETIMEDOUT(116)
+            if err != 11 and err != 116:  # EAGAIN, ETIMEDOUT
                 print("⚠️  Socket错误: " + str(e))
         except Exception as e:
             print("❌ 请求处理错误: " + str(e))

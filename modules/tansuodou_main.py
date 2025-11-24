@@ -460,13 +460,13 @@ class TansuodouDevice:
             except OSError as e:
                 # 处理超时和其他OSError
                 err = e.errno if hasattr(e, 'errno') else (e.args[0] if e.args else None)
-                # 检查常见的非阻塞错误码
+                # 检查常见的非阻塞错误码（静默处理，不打印日志）
                 if err == errno.EAGAIN or err == errno.ETIMEDOUT or err == 11:  # 11 = EAGAIN/EWOULDBLOCK
                     continue
-                # 其他OSError
+                # 其他真正的Socket错误才打印
                 error_count += 1
                 if error_count <= 3 or error_count % 30 == 0:
-                    print("❌ Socket错误: " + str(e))
+                    print("⚠️ Socket错误: " + str(e))
                 time.sleep(0.2)
     
     def handle_websocket_client(self, conn, addr):
@@ -519,7 +519,7 @@ class TansuodouDevice:
                                 last_ping_time = time.time()  # 更新活跃时间
                                 
                         except OSError as e:
-                            # 超时或EAGAIN错误，检查心跳
+                            # 超时或EAGAIN错误，检查心跳（静默处理，不打印日志）
                             if time.time() - last_ping_time > 60:
                                 print("   ⏱️ 客户端超时（60秒无活动）")
                                 client_active = False
