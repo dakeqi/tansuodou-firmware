@@ -123,16 +123,13 @@ jobs:
       - name: Save Firmware
         run: |
           mkdir -p $GITHUB_WORKSPACE/binaries
+
           FILENAME="tansuodou-${{ matrix.board }}-v${{ steps.version.outputs.version }}.bin"
+
           # 复制固件文件
           cp ~/micropython/ports/esp32/build-${{ matrix.board }}/firmware.bin \
             $GITHUB_WORKSPACE/binaries/$FILENAME
-          echo "Firmware copied: $FILENAME"
-              $GITHUB_WORKSPACE/binaries/$FILENAME
-          else
-            cp ~/micropython/ports/esp32/build-${{ matrix.board }}/firmware.bin \
-              $GITHUB_WORKSPACE/binaries/$FILENAME
-          fi
+
           echo "Saved: $FILENAME"
           ls -lh $GITHUB_WORKSPACE/binaries/$FILENAME
       - name: Upload Firmware Artifact
