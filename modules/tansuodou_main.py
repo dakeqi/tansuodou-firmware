@@ -846,22 +846,29 @@ class TansuodouDevice:
                 }))
             else:
                 # 短代码直接执行，捕获print输出
-                import sys
-                import io
+                # MicroPython中sys没有stdout，使用自定义print函数捕获
                 
-                # 保存原始 stdout
-                old_stdout = sys.stdout
+                # 创建输出捕获列表
+                output_lines = []
                 
-                # 创建输出捕获器
-                output_buffer = io.StringIO()
-                sys.stdout = output_buffer
+                # 保存原始print函数
+                original_print = print
+                
+                # 定义捕获print的函数
+                def captured_print(*args, **kwargs):
+                    # 将参数转换为字符串并捕获
+                    line = ' '.join(str(arg) for arg in args)
+                    output_lines.append(line)
+                    # 同时输出到设备日志（可选）
+                    original_print(*args, **kwargs)
                 
                 try:
-                    # 执行代码（print会输出到 output_buffer）
-                    exec(code, globals())
+                    # 替换全局print函数
+                    import builtins
+                    builtins.print = captured_print
                     
-                    # 获取捕获的输出
-                    captured_output = output_buffer.getvalue()
+                    # 执行代码
+                    exec(code, globals())
                     
                     # 发送执行成功消息
                     self.send_websocket_message(conn, json.dumps({
@@ -870,16 +877,16 @@ class TansuodouDevice:
                     }))
                     
                     # 如果有输出，发送到前端
-                    if captured_output and captured_output.strip():
+                    if output_lines:
+                        captured_output = '\n'.join(output_lines)
                         self.send_websocket_message(conn, json.dumps({
                             'type': 'output',
                             'data': captured_output
                         }))
                         
                 finally:
-                    # 恢复 stdout
-                    sys.stdout = old_stdout
-                    output_buffer.close()
+                    # 恢复原始print函数
+                    builtins.print = original_print
                     
         except Exception as e:
             import sys
