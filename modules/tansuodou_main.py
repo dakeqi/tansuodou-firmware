@@ -1095,7 +1095,7 @@ class TansuodouDevice:
     def run(self):
         """运行主程序（生产环境标准：完整错误处理）"""
         print("\n" + "="*50)
-        print("  🚀 搅豆物联主程序")
+        print("  🚀 搭豆智联主程序")
         print("  固件版本: v" + FIRMWARE_VERSION + " (Build " + FIRMWARE_BUILD + ")")
         print("="*50)
         

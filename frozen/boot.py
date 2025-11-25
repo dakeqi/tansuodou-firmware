@@ -23,10 +23,10 @@ def flush_stdout():
     except Exception:
         pass
 
-# 搅豆物联固件 - MicroPython v1.22.0 + ESP-IDF v5.0.4（原始成功配置）
-FIRMWARE_VERSION = "3.1.0"
-FIRMWARE_BUILD = "20251125-02"  # 修复sys.stdout缺失问题
-FIRMWARE_NAME = "搅豆物联 TansuoDou IoT Platform"
+# 搭豆智联固件 - MicroPython v1.22.0 + ESP-IDF v5.0.4（原始成功配置）
+FIRMWARE_VERSION = "3.1.1"
+FIRMWARE_BUILD = "20251125-03"  # 修正品牌名称：搅豆物联 → 搭豆智联
+FIRMWARE_NAME = "搭豆智联 DaDou IoT Platform"
 
 print("\n" + "="*50)
 print("    🔌 " + FIRMWARE_NAME)
