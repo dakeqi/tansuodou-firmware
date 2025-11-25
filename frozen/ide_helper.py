@@ -80,9 +80,9 @@ class IDEHelper:
                 firmware_build = boot.FIRMWARE_BUILD
                 firmware_name = boot.FIRMWARE_NAME
             except:
-                firmware_version = "2.4.0"
+                firmware_version = "unknown"
                 firmware_build = "unknown"
-                firmware_name = "TansuoDou IoT"
+                firmware_name = "搭豆智联 DaDou IoT"
             
             info = {
                 "type": "device_info",

@@ -45,8 +45,10 @@ try:
     print("✅ 版本信息导入成功: v" + FIRMWARE_VERSION)
 except Exception as e:
     print("⚠️  版本信息导入失败: " + str(e))
-    FIRMWARE_VERSION = "3.0.4"
-    FIRMWARE_BUILD = "20251119-v3"
+    # 注意：不再使用硬编码默认值，版本信息必须从 boot 模块获取
+    print("❌ 致命错误：无法从 boot.py 导入版本信息！")
+    print("请确认固件已正确烧录，并且 boot.py 已被 freeze。")
+    raise ImportError("缺少必要的版本信息，无法启动设备")
 
 # 云端API地址配置
 # 生产环境：使用云托管公网地址（默认）

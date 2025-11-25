@@ -154,7 +154,7 @@ def handle_improv_get_info(data):
         import boot
         info_str = f"{boot.FIRMWARE_NAME}\n{boot.FIRMWARE_VERSION}\nESP32-S3\n{get_device_id()}"
     except:
-        info_str = f"TansuoDou IoT\n2.4.0\nESP32-S3\n{get_device_id()}"
+        info_str = f"搭豆智联 DaDou IoT\nunknown\nESP32\n{get_device_id()}"
     
     info_data = info_str.encode('utf-8')
     send_improv_response(IMPROV_TYPE_RPC_RESULT, info_data)
@@ -172,7 +172,7 @@ def handle_json_command(cmd):
             version = boot.FIRMWARE_VERSION
             build = boot.FIRMWARE_BUILD
         except:
-            version = "2.4.0"
+            version = "unknown"
             build = "unknown"
         
         response = {
