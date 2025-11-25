@@ -581,12 +581,40 @@ class TansuodouDevice:
                 }))
                 
             elif msg_type == 'execute':
-                # 处理两种格式: {"command": "..."} 或直接字符串
+                # 处理三种格式:
+                # 1. 控制命令: {"control": "ctrl_c"} 或 {"control": "ctrl_d"}
+                # 2. 代码上传: {"mode": "temporary/persistent", "command": "..."}
+                # 3. 普通命令: {"command": "..."}
                 payload = data.get('data', {})
                 print("🔍 调试: payload 类型 =", type(payload), ", 值 =", str(payload)[:100])
                 
+                # 优先检查是否是控制命令（Ctrl+C / Ctrl+D）
+                if isinstance(payload, dict) and 'control' in payload:
+                    control_cmd = payload.get('control')
+                    
+                    if control_cmd == 'ctrl_c':
+                        # Ctrl+C: 停止当前程序（等同于立即运行空代码）
+                        print("⏹️  Ctrl+C: 停止当前程序")
+                        self.stop_user_code()
+                        self.send_websocket_message(conn, json.dumps({
+                            'type': 'output',
+                            'data': '✅ [立即运行] 执行成功'
+                        }))
+                    elif control_cmd == 'ctrl_d':
+                        # Ctrl+D: 软重启（不实现，因为会断开WebSocket）
+                        print("⚠️  Ctrl+D: 不支持远程重启（会断开连接）")
+                        self.send_websocket_message(conn, json.dumps({
+                            'type': 'output',
+                            'data': '⚠️  Ctrl+D 远程不可用（会断开WebSocket连接）'
+                        }))
+                    else:
+                        self.send_websocket_message(conn, json.dumps({
+                            'type': 'error',
+                            'data': '未知的控制命令: ' + control_cmd
+                        }))
+                
                 # 检查是否是文件上传模式（有 mode 字段）
-                if isinstance(payload, dict) and 'mode' in payload:
+                elif isinstance(payload, dict) and 'mode' in payload:
                     upload_mode = payload.get('mode')  # 'temporary' 或 'persistent'
                     cmd = payload.get('command', '')
                     filename = payload.get('filename', 'main.py')  # 默认 main.py
@@ -817,14 +845,41 @@ class TansuodouDevice:
                     'data': '✅ [立即运行] 程序已在后台启动\n发送 Ctrl+C 可停止程序'
                 }))
             else:
-                # 短代码直接执行（print会直接输出到设备日志）
-                exec(code, globals())
+                # 短代码直接执行，捕获print输出
+                import sys
+                import io
                 
-                # 发送执行成功消息
-                self.send_websocket_message(conn, json.dumps({
-                    'type': 'output',
-                    'data': '✅ [立即运行] 执行成功'
-                }))
+                # 保存原始 stdout
+                old_stdout = sys.stdout
+                
+                # 创建输出捕获器
+                output_buffer = io.StringIO()
+                sys.stdout = output_buffer
+                
+                try:
+                    # 执行代码（print会输出到 output_buffer）
+                    exec(code, globals())
+                    
+                    # 获取捕获的输出
+                    captured_output = output_buffer.getvalue()
+                    
+                    # 发送执行成功消息
+                    self.send_websocket_message(conn, json.dumps({
+                        'type': 'output',
+                        'data': '✅ [立即运行] 执行成功'
+                    }))
+                    
+                    # 如果有输出，发送到前端
+                    if captured_output and captured_output.strip():
+                        self.send_websocket_message(conn, json.dumps({
+                            'type': 'output',
+                            'data': captured_output
+                        }))
+                        
+                finally:
+                    # 恢复 stdout
+                    sys.stdout = old_stdout
+                    output_buffer.close()
                     
         except Exception as e:
             import sys
