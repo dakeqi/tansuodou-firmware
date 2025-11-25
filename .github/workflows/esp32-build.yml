@@ -1,4 +1,4 @@
-﻿name: Build ESP32 Firmware
+﻿﻿﻿﻿name: Build ESP32 Firmware
 on:
   push:
     paths:
@@ -74,6 +74,10 @@ jobs:
           # 复制Frozen模块（所有设备共用）
           mkdir -p ~/micropython/ports/esp32/tansuodou_frozen
           cp frozen/*.py ~/micropython/ports/esp32/tansuodou_frozen/
+          
+          # 将tansuodou_main.py也加入frozen模块（确保版本一致性）
+          cp modules/tansuodou_main.py ~/micropython/ports/esp32/tansuodou_frozen/
+          
           echo "✅ Frozen modules copied"
           
           # 创建模块目录
@@ -83,9 +87,9 @@ jobs:
           echo "📦 Copying modules for ${{ matrix.board }}..."
           
           # 基础模块（所有设备）
-          cp modules/tansuodou_main.py ~/micropython/ports/esp32/modules/
+          # tansuodou_main.py 已移至frozen模块，不再放入modules目录
           cp modules/ota_http_server.py ~/micropython/ports/esp32/modules/
-          echo "  ✅ Base modules (tansuodou_main, ota_http_server)"
+          echo "  ✅ Base modules (ota_http_server)"
           
           # ESP32特殊功能（ESP32/S2/S3支持触摸，ESP32支持霍尔，ESP32/S2支持DAC）
           if [[ "${{ matrix.board }}" == "ESP32_GENERIC" ]] || \
@@ -144,6 +148,7 @@ jobs:
               "boot.py",
               "wifi_config_helper.py",
               "ide_helper.py",
+              "tansuodou_main.py",
           ))
           EOF
           
