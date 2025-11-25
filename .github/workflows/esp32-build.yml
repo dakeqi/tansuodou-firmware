@@ -1,11 +1,11 @@
-﻿﻿name: Build ESP32 Firmware
+﻿name: Build ESP32 Firmware
 on:
   push:
     paths:
       - 'frozen/**'
       - 'modules/**'
       - 'partitions/**'
-      - '.github/workflows/**'  # 鐩戝惉workflow鏂囦欢鍙樺寲
+      - '.github/workflows/**'
     branches:
       - master
   workflow_dispatch:
@@ -79,7 +79,7 @@ jobs:
           # 创建模块目录
           mkdir -p ~/micropython/ports/esp32/modules
           
-          # 🔥 根据设备类型复制不同的模块
+          # 根据设备类型复制不同的模块
           echo "📦 Copying modules for ${{ matrix.board }}..."
           
           # 基础模块（所有设备）
@@ -243,28 +243,29 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: "鎺㈢储璞嗗浐浠?${{ steps.version.outputs.version }}"
+          name: "探索豆固件 ${{ steps.version.outputs.version }}"
           body: |
-            ## 馃殌 鎺㈢储璞?ESP32 鍥轰欢 ${{ steps.version.outputs.version }}
+            ## 🚀 探索豆 ESP32 固件 ${{ steps.version.outputs.version }}
             **Build:** ${{ steps.version.outputs.build }}
-            **鏋勫缓鏃堕棿:** ${{ github.event.head_commit.timestamp }}
-            ### 馃摝 鏀寔鐨勭‖浠跺钩鍙?            
-            - 鉁?ESP32 (4MB Flash)
-            - 鉁?ESP32-S2 (4MB Flash)
-            - 鉁?ESP32-S3 (8MB Flash)
-            - 鉁?ESP32-C3 (4MB Flash)
-            ### 馃摉 浣跨敤鏂规硶
-            1. 璁块棶 [鎺㈢储璞嗙墿鑱斿钩鍙癩(https://tansuodou.com/firmware/flash)
-            2. 閫夋嫨瀵瑰簲鐨勮姱鐗囧瀷鍙?            3. 涓嬭浇鏈?Release 涓殑鍥轰欢鏂囦欢
-            4. 浣跨敤鍦ㄧ嚎鐑у綍宸ュ叿鎴?esptool.py 鐑у綍
-            ### 馃敡 鎵嬪姩鐑у綍鍛戒护
+            **构建时间:** ${{ github.event.head_commit.timestamp }}
+            ### 📝 支持的硬件平台
+            - ✅ ESP32 (4MB Flash)
+            - ✅ ESP32-S2 (4MB Flash)
+            - ✅ ESP32-S3 (8MB Flash)
+            - ✅ ESP32-C3 (4MB Flash)
+            ### 📖 使用方法
+            1. 访问 [探索豆物联平台](https://tansuodou.com/firmware/flash)
+            2. 选择对应的芯片型号
+            3. 下载本 Release 中的固件文件
+            4. 使用在线烧录工具或 esptool.py 烧录
+            ### 🔧 手动烧录命令
             ```bash
             # ESP32 / ESP32-S2 / ESP32-C3
             esptool.py --port COM3 write_flash 0x1000 tansuodou-XXX-v${{ steps.version.outputs.version }}.bin
             # ESP32-S3
             esptool.py --port COM3 write_flash 0x0 tansuodou-ESP32_GENERIC_S3-v${{ steps.version.outputs.version }}.bin
             ```
-            ### 馃摑 鏇存柊鍐呭
+            ### 📝 更新内容
             ${{ github.event.head_commit.message }}
           files: release-files/*.bin
           draft: false
