@@ -53,7 +53,7 @@ except Exception as e:
 # 开发环境：通过WiFi配置传入api_base覆盖
 CLOUD_API_BASE = "https://tansuodou.com/api"  # 云托管公网地址
 WS_PORT = 8266  # WebSocket端口
-HEARTBEAT_INTERVAL = 30  # 心跳间隔（秒）
+# ✅ 移除心跳机制：不再需要定期HTTP请求，前端通过WebSocket ping实时检测
 
 # ...
 class TansuodouDevice:
@@ -321,50 +321,7 @@ class TansuodouDevice:
             return "esp32"
     
     # ...
-    def heartbeat_thread(self):
-        """心跳线程 - 定期向云端发送心跳（生产环境优化）"""
-        print("\n💓 心跳线程已启动（间隔" + str(HEARTBEAT_INTERVAL) + "秒）")
-        
-        # 使用配置中的API地址，支持本地测试
-        api_base = self.config.get('api_base', CLOUD_API_BASE)
-        heartbeat_count = 0
-        error_count = 0
-        
-        while self.running:
-            try:
-                import urequests
-                
-                data = {'deviceId': self.device_id}
-                response = urequests.post(
-                    str(api_base) + "/devices/heartbeat",
-                    json=data,
-                    headers={'Content-Type': 'application/json'},
-                    timeout=5
-                )
-                response.close()
-                
-                heartbeat_count += 1
-                error_count = 0  # 重置错误计数
-                
-                # 每10次心跳才打印一次日志，减少日志干扰
-                if heartbeat_count % 10 == 0:
-                    # 格式化时间为字符串
-                    t = time.localtime()
-                    time_str = "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}".format(t[0], t[1], t[2], t[3], t[4], t[5])
-                    print("💓 心跳发送成功 [" + str(heartbeat_count) + "] - " + time_str)
-                
-            except Exception as e:
-                error_count += 1
-                # 只打印前3次错误，避免日志洪水
-                if error_count <= 3:
-                    print("⚠️  心跳发送失败 [" + str(error_count) + "]: " + str(e))
-                    if error_count == 3:
-                        print("   (后续心跳错误将不再显示)")
-            
-            # ...
-            time.sleep(HEARTBEAT_INTERVAL)
     
-    # ...
     def start_ota_http_server(self):
         """启动 OTA HTTP 服务器"""
         try:
@@ -1152,12 +1109,14 @@ class TansuodouDevice:
         print("\n[步骤 3/4] mDNS广播")
         self.start_mdns()
         
-        # 步骤4: 启动心跳线程（仅在注册成功时）
-        print("\n[步骤 4/4] 心跳服务")
+        # 步骤4: 设备就绪（移除心跳机制）
+        print("\n[步骤 4/4] 设备就绪")
+        # ✅ 不再需要HTTP心跳：WebSocket长连接 + 前端实时ping检测
         if registration_success:
-            _thread.start_new_thread(self.heartbeat_thread, ())
+            print("✅ 设备已注册到云端")
         else:
-            print("   ⏸️  心跳服务未启动（云端注册失败）")
+            print("⚠️  未注册到云端（本地模式）")
+            print("   请手动绑定设备ID: " + str(self.device_id))
         
         # 显示设备就绪信息
         print("\n" + "="*50)
@@ -1197,3 +1156,5 @@ def start(config):
     """启动主程序"""
     device = TansuodouDevice(config)
     device.run()
+
+
