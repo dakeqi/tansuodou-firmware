@@ -37,18 +37,18 @@ user_code_thread = None  # 当前运行的用户代码线程ID
 stop_user_code_flag = False  # 停止标志
 main_py_running = False  # main.py 是否正在运行
 
-# 从 boot.py 导入版本信息（延迟导入）
+# 从 version.py 导入版本信息（所有模块统一使用）
 try:
-    import boot
-    FIRMWARE_VERSION = boot.FIRMWARE_VERSION
-    FIRMWARE_BUILD = boot.FIRMWARE_BUILD
+    import version
+    FIRMWARE_VERSION = version.FIRMWARE_VERSION
+    FIRMWARE_BUILD = version.FIRMWARE_BUILD
     print("✅ 版本信息导入成功: v" + FIRMWARE_VERSION)
 except Exception as e:
     print("⚠️  版本信息导入失败: " + str(e))
-    # 注意：不再使用硬编码默认值，版本信息必须从 boot 模块获取
-    print("❌ 致命错误：无法从 boot.py 导入版本信息！")
-    print("请确认固件已正确烧录，并且 boot.py 已被 freeze。")
-    raise ImportError("缺少必要的版本信息，无法启动设备")
+    # 使用回退版本号
+    FIRMWARE_VERSION = "unknown"
+    FIRMWARE_BUILD = "unknown"
+    print("⚠️  使用回退版本号")
 
 # 云端API地址配置
 # 生产环境：使用云托管公网地址（默认）

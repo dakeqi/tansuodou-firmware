@@ -1,4 +1,4 @@
-﻿name: Build ESP32 Firmware
+﻿﻿﻿﻿name: Build ESP32 Firmware
 
 on:
   push:
@@ -160,6 +160,7 @@ jobs:
           cat > ~/micropython/ports/esp32/boards/manifest_tansuodou.py << 'EOF'
           include("$(PORT_DIR)/boards/manifest.py")
           freeze("$(PORT_DIR)/tansuodou_frozen", (
+              "version.py",
               "boot.py",
               "wifi_config_helper.py",
               "ide_helper.py",
@@ -203,7 +204,7 @@ jobs:
       - name: Extract Version
         id: version
         run: |
-          VERSION=$(grep 'FIRMWARE_VERSION = ' frozen/boot.py | sed 's/.*"\(.*\)".*/\1/')
+          VERSION=$(grep 'FIRMWARE_VERSION = ' frozen/version.py | sed 's/.*"\(.*\)".*/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Firmware version: $VERSION"
       
@@ -242,8 +243,8 @@ jobs:
       - name: Extract Version
         id: version
         run: |
-          VERSION=$(grep 'FIRMWARE_VERSION = ' frozen/boot.py | sed 's/.*"\(.*\)".*/\1/')
-          BUILD=$(grep 'FIRMWARE_BUILD = ' frozen/boot.py | sed 's/.*"\(.*\)".*/\1/')
+          VERSION=$(grep 'FIRMWARE_VERSION = ' frozen/version.py | sed 's/.*"\(.*\)".*/\1/')
+          BUILD=$(grep 'FIRMWARE_BUILD = ' frozen/version.py | sed 's/.*"\(.*\)".*/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "build=$BUILD" >> $GITHUB_OUTPUT
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT

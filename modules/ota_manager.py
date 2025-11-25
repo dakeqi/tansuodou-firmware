@@ -21,11 +21,11 @@ try:
 except:
     print("警告: ESP32模块不可用")
 
-# 从 boot 模块导入版本信息（与主程序保持一致）
+# 从 version 模块导入版本信息（与主程序保持一致）
 try:
-    import boot
-    FIRMWARE_VERSION = boot.FIRMWARE_VERSION
-    FIRMWARE_BUILD = boot.FIRMWARE_BUILD
+    import version
+    FIRMWARE_VERSION = version.FIRMWARE_VERSION
+    FIRMWARE_BUILD = version.FIRMWARE_BUILD
 except Exception as e:
     print("⚠️  OTA: 无法导入版本信息, 使用未知版本")
     FIRMWARE_VERSION = "unknown"

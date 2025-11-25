@@ -24,9 +24,11 @@ def flush_stdout():
         pass
 
 # 搭豆智联固件 - MicroPython v1.22.0 + ESP-IDF v5.0.4（原始成功配置）
-FIRMWARE_VERSION = "3.1.1"
-FIRMWARE_BUILD = "20251125-03"  # 修正品牌名称：搅豆物联 → 搭豆智联
-FIRMWARE_NAME = "搭豆智联 DaDou IoT Platform"
+# 版本信息统一从 version.py 导入
+import version
+FIRMWARE_VERSION = version.FIRMWARE_VERSION
+FIRMWARE_BUILD = version.FIRMWARE_BUILD
+FIRMWARE_NAME = version.FIRMWARE_NAME
 
 print("\n" + "="*50)
 print("    🔌 " + FIRMWARE_NAME)
