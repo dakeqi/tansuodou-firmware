@@ -228,7 +228,7 @@ def parse_query(query_string):
                 params[key] = value
     return params
 
-def start_web_server(port=80):
+def start_web_server(port=8080):
     """Start device web server"""
     device_id = get_device_id()
     
@@ -312,4 +312,4 @@ def register_switch(name, state=False):
 
 def start():
     """Start web server (entry point)"""
-    start_web_server(80)
+    start_web_server(8080)
