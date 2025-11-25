@@ -335,11 +335,11 @@ class TansuodouDevice:
             api_base = self.config.get('api_base', CLOUD_API_BASE)
             
             # 启动服务器（非阻塞）
-            self.ota_server = ota_http_server.start_ota_server(80, api_base)
+            self.ota_server = ota_http_server.start_ota_server(8080, api_base)
             
             if self.ota_server:
                 print("   ✅ OTA HTTP 服务器已启动")
-                print("   📡 端点: http://" + str(self.ip) + ":80")
+                print("   📡 端点: http://" + str(self.ip) + ":8080")
                 
                 # 在独立线程中运行服务器
                 _thread.start_new_thread(self.run_ota_server, ())
@@ -368,7 +368,7 @@ class TansuodouDevice:
                 return
             
             print("   ✅ 设备Web服务器启动中...")
-            print("   🌐 本地访问: http://" + str(self.ip) + ":8080")
+            print("   🌐 本地访问: http://" + str(self.ip))
             print("   📊 功能: 传感器数据 + 开关控制")
             
             # 在独立线程中启动 Web 服务器
@@ -795,86 +795,36 @@ class TansuodouDevice:
         self.stop_user_code()
         
         try:
-            import sys
-            import io
+            # 不捕获输出，直接执行（MicroPython某些固件不支持sys.stdout重定向）
+            # 用户代码的print会直接输出到串口/WebSocket
             
-            # 检查sys.stdout是否可用
-            has_stdout = hasattr(sys, 'stdout') and sys.stdout is not None
+            # 检测无限循环
+            has_infinite_loop = 'while True' in code or 'while 1' in code
             
-            if has_stdout:
-                # 创建输出缓冲区
-                output_buffer = io.StringIO()
-                error_buffer = io.StringIO()
-                original_stdout = sys.stdout
-                original_stderr = sys.stderr
-                sys.stdout = output_buffer
-                sys.stderr = error_buffer
-            else:
-                # sys.stdout不可用，直接执行
-                output_buffer = None
-                error_buffer = None
-            
-            try:
-                # 检测无限循环
-                has_infinite_loop = 'while True' in code or 'while 1' in code
+            if has_infinite_loop:
+                print("⚠️  检测到无限循环，在独立线程中运行...")
                 
-                if has_infinite_loop:
-                    print("⚠️  检测到无限循环，在独立线程中运行...")
-                    
-                    # 恢复 stdout/stderr
-                    if has_stdout:
-                        sys.stdout = original_stdout
-                        sys.stderr = original_stderr
-                        output_buffer.close()
-                        error_buffer.close()
-                    
-                    # 启动新线程
-                    global user_code_thread, stop_user_code_flag
-                    stop_user_code_flag = False
-                    user_code_thread = _thread.start_new_thread(
-                        self.execute_user_code_in_thread, 
-                        (code, conn)
-                    )
-                    
-                    self.send_websocket_message(conn, json.dumps({
-                        'type': 'output',
-                        'data': '✅ [立即运行] 程序已在后台启动\n发送 Ctrl+C 可停止程序'
-                    }))
-                else:
-                    # 短代码直接执行
-                    exec(code, globals())
-                    
-                    if has_stdout:
-                        sys.stdout = original_stdout
-                        sys.stderr = original_stderr
-                        
-                        output = output_buffer.getvalue()
-                        error_output = error_buffer.getvalue()
-                    else:
-                        output = ''
-                        error_output = ''
-                    
-                    if error_output:
-                        self.send_websocket_message(conn, json.dumps({
-                            'type': 'error',
-                            'data': error_output.rstrip()
-                        }))
-                    elif output:
-                        self.send_websocket_message(conn, json.dumps({
-                            'type': 'output',
-                            'data': output.rstrip()
-                        }))
-                    else:
-                        self.send_websocket_message(conn, json.dumps({
-                            'type': 'output',
-                            'data': '✅ [立即运行] 执行成功'
-                        }))
-            finally:
-                if not has_infinite_loop and has_stdout:
-                    sys.stdout = original_stdout
-                    sys.stderr = original_stderr
-                    output_buffer.close()
-                    error_buffer.close()
+                # 启动新线程
+                global user_code_thread, stop_user_code_flag
+                stop_user_code_flag = False
+                user_code_thread = _thread.start_new_thread(
+                    self.execute_user_code_in_thread, 
+                    (code, conn)
+                )
+                
+                self.send_websocket_message(conn, json.dumps({
+                    'type': 'output',
+                    'data': '✅ [立即运行] 程序已在后台启动\n发送 Ctrl+C 可停止程序'
+                }))
+            else:
+                # 短代码直接执行（print会直接输出到设备日志）
+                exec(code, globals())
+                
+                # 发送执行成功消息
+                self.send_websocket_message(conn, json.dumps({
+                    'type': 'output',
+                    'data': '✅ [立即运行] 执行成功'
+                }))
                     
         except Exception as e:
             import sys

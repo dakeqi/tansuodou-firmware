@@ -27,7 +27,7 @@ ota_progress = {
 class OTAHTTPServer:
     """HTTP OTA 服务器"""
     
-    def __init__(self, port=80):
+    def __init__(self, port=8080):
         self.port = port
         self.sock = None
         self.ota_manager = None
