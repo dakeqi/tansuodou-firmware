@@ -796,13 +796,21 @@ class TansuodouDevice:
             import sys
             import io
             
-            # 创建输出缓冲区
-            output_buffer = io.StringIO()
-            error_buffer = io.StringIO()
-            original_stdout = sys.stdout
-            original_stderr = sys.stderr
-            sys.stdout = output_buffer
-            sys.stderr = error_buffer
+            # 检查sys.stdout是否可用
+            has_stdout = hasattr(sys, 'stdout') and sys.stdout is not None
+            
+            if has_stdout:
+                # 创建输出缓冲区
+                output_buffer = io.StringIO()
+                error_buffer = io.StringIO()
+                original_stdout = sys.stdout
+                original_stderr = sys.stderr
+                sys.stdout = output_buffer
+                sys.stderr = error_buffer
+            else:
+                # sys.stdout不可用，直接执行
+                output_buffer = None
+                error_buffer = None
             
             try:
                 # 检测无限循环
@@ -812,10 +820,11 @@ class TansuodouDevice:
                     print("⚠️  检测到无限循环，在独立线程中运行...")
                     
                     # 恢复 stdout/stderr
-                    sys.stdout = original_stdout
-                    sys.stderr = original_stderr
-                    output_buffer.close()
-                    error_buffer.close()
+                    if has_stdout:
+                        sys.stdout = original_stdout
+                        sys.stderr = original_stderr
+                        output_buffer.close()
+                        error_buffer.close()
                     
                     # 启动新线程
                     global user_code_thread, stop_user_code_flag
@@ -833,11 +842,15 @@ class TansuodouDevice:
                     # 短代码直接执行
                     exec(code, globals())
                     
-                    sys.stdout = original_stdout
-                    sys.stderr = original_stderr
-                    
-                    output = output_buffer.getvalue()
-                    error_output = error_buffer.getvalue()
+                    if has_stdout:
+                        sys.stdout = original_stdout
+                        sys.stderr = original_stderr
+                        
+                        output = output_buffer.getvalue()
+                        error_output = error_buffer.getvalue()
+                    else:
+                        output = ''
+                        error_output = ''
                     
                     if error_output:
                         self.send_websocket_message(conn, json.dumps({
@@ -855,7 +868,7 @@ class TansuodouDevice:
                             'data': '✅ [立即运行] 执行成功'
                         }))
             finally:
-                if not has_infinite_loop:
+                if not has_infinite_loop and has_stdout:
                     sys.stdout = original_stdout
                     sys.stderr = original_stderr
                     output_buffer.close()
