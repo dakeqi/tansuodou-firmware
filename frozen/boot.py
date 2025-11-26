@@ -30,10 +30,7 @@ FIRMWARE_VERSION = version.FIRMWARE_VERSION
 FIRMWARE_BUILD = version.FIRMWARE_BUILD
 FIRMWARE_NAME = version.FIRMWARE_NAME
 
-print("\n" + "="*50)
-print("    🔌 " + FIRMWARE_NAME)
-print("    版本: v" + FIRMWARE_VERSION + " (Build " + FIRMWARE_BUILD + ")")
-print("="*50)
+# 简化版：不显示大banner
 
 # ...
 def get_device_id():
@@ -601,9 +598,7 @@ def start_config_mode(manual=False):
 
 def start_normal_mode(config):
     """启动正常工作模式（带错误恢复）"""
-    print("\n" + "-"*50)
-    print("  🚀 启动正常工作模式")
-    print("-"*50)
+    # 简化版：不显示模式提示
     
     try:
         import tansuodou_main
@@ -630,25 +625,14 @@ def start_normal_mode(config):
 # ...
 def main():
     """主启动流程（带完整错误处理）"""
-    # ...
+    # 简化版：只显示设备ID和版本
     device_id = get_device_id()
-    print("\n📋 设备ID: " + device_id)
-    print("💾 芯片ID: " + machine.unique_id().hex().upper())
+    print("\n📱 " + device_id + " | v" + FIRMWARE_VERSION)
     
-    # ...
-    print("🔧 固件版本: v" + FIRMWARE_VERSION)
-    print("📅 构建日期: " + FIRMWARE_BUILD)
-    
-    # ...
+    # 静默执行OTA验证
     try:
         import gc
         gc.collect()
-        print("💾 可用内存: " + str(gc.mem_free()) + " bytes")
-    except:
-        pass
-    
-    # ...
-    try:
         import ota_manager
         ota_manager.OTAManager.verify_new_firmware()
     except:
@@ -667,11 +651,8 @@ def main():
         
         # 收到配置后会自动重启，下面的代码不会执行
     else:
-        # 有配置，直接启动（不显示配置等待信息）
-        print("\n✅ 发现WiFi配置")
-        print("   SSID: " + config['ssid'])
-        print("   设备名: " + config.get('device_name', device_id))
-        print("   🚀 启动设备主程序...")
+        # 简化版：只显示SSID
+        print("✅ WiFi: " + config['ssid'])
         start_normal_mode(config)
 
 # ...
