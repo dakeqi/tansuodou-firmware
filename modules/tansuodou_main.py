@@ -55,7 +55,6 @@ except Exception as e:
 # 开发环境：通过WiFi配置传入api_base覆盖
 CLOUD_API_BASE = "https://tansuodou.com/api"  # 云托管公网地址
 WS_PORT = 8266  # WebSocket端口
-# ✅ 移除心跳机制：不再需要定期HTTP请求，前端通过WebSocket ping实时检测
 
 # ...
 class TansuodouDevice:
@@ -69,8 +68,7 @@ class TansuodouDevice:
         self.running = True
         self.ota_server = None  # OTA HTTP 服务器
         
-        # MQTT组件已移除
-        
+               
     def get_device_id(self):
         """Get unique device ID"""
         wlan = network.WLAN(network.STA_IF)
@@ -87,98 +85,37 @@ class TansuodouDevice:
         ssid = self.config['ssid']
         password = self.config['password']
         
-        print("\n" + "="*50)
-        print("📶 WiFi连接配置")
-        print("="*50)
-        print("   SSID: " + str(ssid))
-        print("   密码长度: " + str(len(password)) + " 个字符")
-        print("   API地址: " + str(self.config.get('api_base', CLOUD_API_BASE)))
-        print("   用户ID: " + str(self.config.get('user_id', '(未设置)')))
-        print("="*50)
+        # 简化日志：只显示SSID
+        print("📶 WiFi: " + str(ssid))
         
         if not self.wlan.isconnected():
-            print("\n🔄 开始连接WiFi...")
-            
             # 检查是否已经有其他WiFi配置残留
             if self.wlan.status() != network.STAT_IDLE:
-                print("   ℹ️  断开旧连接...")
                 self.wlan.disconnect()
                 time.sleep(1)
             
             self.wlan.connect(ssid, password)
             
-            # 等待连接（详细状态）
-            timeout = 30  # 增加到30秒
-            last_status = None
-            
+            # 等待连接（静默模式）
+            timeout = 30
             while not self.wlan.isconnected() and timeout > 0:
-                status = self.wlan.status()
-                
-                # 只在状态变化时打印
-                if status != last_status:
-                    status_text = self.get_wifi_status_text(status)
-                    print("   " + status_text)
-                    last_status = status
-                
-                # MicroPython不支持end参数，改用sys.stdout.write
-                import sys
-                sys.stdout.write('.')
                 time.sleep(1)
                 timeout -= 1
             
-            print()  # 换行
-            
             if self.wlan.isconnected():
                 self.ip = self.wlan.ifconfig()[0]
-                print("\n" + "="*50)
-                print("✅ WiFi连接成功！")
-                print("="*50)
-                print("   IP地址: " + str(self.ip))
-                print("   子网掩码: " + str(self.wlan.ifconfig()[1]))
-                print("   网关: " + str(self.wlan.ifconfig()[2]))
-                print("   DNS: " + str(self.wlan.ifconfig()[3]))
-                print("   信号强度: " + str(self.wlan.status('rssi')) + " dBm")
-                print("   MAC地址: " + ubinascii.hexlify(self.wlan.config('mac')).decode())
-                print("="*50)
+                print("✅ WiFi已连接: " + str(self.ip))
                 
-                # 测试网络连通性
-                print("\n🌐 测试网络连通性...")
-                if self.test_network_connectivity():
-                    print("✅ 网络连接正常，可以访问互联网")
-                    return True
-                else:
-                    print("⚠️  网络连接异常，可能无法访问云端")
-                    print("   但设备将继续运行（本地模式）")
-                    return True  # 仍然返回True，让设备继续运行
+                # 测试网络连通性（静默）
+                self.test_network_connectivity()
+                return True
             else:
-                # 连接失败，显示详细原因
-                final_status = self.wlan.status()
-                print("\n" + "="*50)
-                print("❌ WiFi连接失败！")
-                print("="*50)
-                print("   最终状态: " + self.get_wifi_status_text(final_status))
-                print("\n可能原因:")
-                
-                # 兼容性检查：只在常量存在时才检查
-                if hasattr(network, 'STAT_WRONG_PASSWORD') and final_status == network.STAT_WRONG_PASSWORD:
-                    print("   ❌ WiFi密码错误（最常见）")
-                    print("   💡 请检查密码是否正确，区分大小写")
-                elif hasattr(network, 'STAT_NO_AP_FOUND') and final_status == network.STAT_NO_AP_FOUND:
-                    print("   ❌ 找不到该WiFi网络")
-                    print("   💡 请检查SSID是否正确，区分大小写")
-                elif hasattr(network, 'STAT_CONNECT_FAIL') and final_status == network.STAT_CONNECT_FAIL:
-                    print("   ❌ 连接被路由器拒绝")
-                    print("   💡 路由器可能设置了MAC地址过滤")
-                else:
-                    print("   1. WiFi密码错误")
-                    print("   2. WiFi信号太弱")
-                    print("   3. WiFi名称不存在")
-                    print("   4. 路由器拒绝连接")
-                print("="*50)
+                # 连接失败，简化提示
+                print("❌ WiFi连接失败")
                 return False
         else:
             self.ip = self.wlan.ifconfig()[0]
-            print("\n✅ WiFi已连接: " + str(self.ip))
+            print("✅ WiFi已连接: " + str(self.ip))
             return True
     
     def get_wifi_status_text(self, status):
