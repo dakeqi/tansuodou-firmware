@@ -42,13 +42,9 @@ try:
     import version
     FIRMWARE_VERSION = version.FIRMWARE_VERSION
     FIRMWARE_BUILD = version.FIRMWARE_BUILD
-    print("✅ 版本信息导入成功: v" + FIRMWARE_VERSION)
 except Exception as e:
-    print("⚠️  版本信息导入失败: " + str(e))
-    # 使用回退版本号
     FIRMWARE_VERSION = "unknown"
     FIRMWARE_BUILD = "unknown"
-    print("⚠️  使用回退版本号")
 
 # 云端API地址配置
 # 生产环境：使用云托管公网地址（默认）
@@ -173,24 +169,8 @@ class TansuodouDevice:
             if 'user_id' in self.config and self.config['user_id']:
                 data['userId'] = self.config['user_id']
             
-            print("\n" + "="*50)
-            print("🌐 注册设备到云端")
-            print("="*50)
-            print("   API地址: " + str(api_base))
-            print("   注册端点: /devices/register")
-            print("   设备ID: " + str(self.device_id))
-            print("   设备名称: " + str(self.device_name))
-            print("   IP地址: " + str(self.ip))
-            print("   芯片类型: " + str(data['type']))
-            print("   固件版本: " + str(data['firmware']))
-            print("   MAC地址: " + str(data['mac']))
-            
-            if 'userId' in data:
-                print("   🔗 用户ID: " + str(data['userId']) + " (自动绑定)")
-            else:
-                print("   ℹ️  用户ID: 未设置（需手动绑定）")
-            
-            print("\n📤 发送注册请求...")
+            # 简化版：静默注册
+            print("🌐 云端注册...")
             
             try:
                 response = urequests.post(
@@ -200,45 +180,24 @@ class TansuodouDevice:
                     timeout=15  # 增加超时时间到15秒
                 )
                 
-                print("   ✓ 收到响应，状态码: " + str(response.status_code))
-                
+                # 简化响应日志
                 if response.status_code == 200:
                     result = response.json()
                     response.close()
                     
                     if result.get('success'):
-                        print("\n" + "="*50)
-                        print("✅ 设备注册成功！")
-                        print("="*50)
-                        print("   消息: " + str(result.get('message', '')))
-                        
-                        if result.get('autoBound'):
-                            print("   🎉 已自动绑定到用户账户")
-                        elif result.get('existed'):
-                            print("   ℹ️  设备已存在，信息已更新")
-                        else:
-                            print("   ℹ️  新设备已注册")
-                        
-                        print("="*50)
+                        print("✅ 云端注册成功")
                         return True
                     else:
-                        print("\n⚠️  注册失败: " + str(result.get('error', result.get('message', 'Unknown'))))
+                        print("❌ 注册失败: " + str(result.get('error', '')))
                         return False
                 else:
-                    error_text = response.text
+                    print("❌ 注册失败 HTTP " + str(response.status_code))
                     response.close()
-                    print("\n❌ 注册失败，HTTP " + str(response.status_code))
-                    print("   响应: " + str(error_text[:200]))
                     return False
                     
             except Exception as req_error:
-                print("\n❌ 请求失败: " + str(req_error))
-                print("   错误类型: " + str(type(req_error).__name__))
-                print("\n可能原因:")
-                print("   1. 网络不通（无法访问互联网）")
-                print("   2. API地址错误: " + str(api_base))
-                print("   3. 云端服务未运行")
-                print("   4. 防火墙阻止连接")
+                print("❌ 注册请求失败: " + str(req_error))
                 return False
                 
         except ImportError:
@@ -275,10 +234,7 @@ class TansuodouDevice:
             self.ota_server = ota_http_server.start_ota_server(8080, api_base)
             
             if self.ota_server:
-                print("   ✅ OTA HTTP 服务器已启动")
-                print("   📡 端点: http://" + str(self.ip) + ":8080")
-                
-                # 在独立线程中运行服务器
+                print("✅ OTA: http://" + str(self.ip) + ":8080")
                 _thread.start_new_thread(self.run_ota_server, ())
             else:
                 print("   ❌ OTA HTTP 服务器启动失败")
@@ -304,32 +260,22 @@ class TansuodouDevice:
                 print("   ⏸️  设备Web服务器模块未找到")
                 return
             
-            print("   ✅ 设备Web服务器启动中...")
-            print("   🌐 本地访问: http://" + str(self.ip))
-            print("   📊 功能: 传感器数据 + 开关控制")
-            
-            # 在独立线程中启动 Web 服务器
+            print("✅ Web: http://" + str(self.ip))
             _thread.start_new_thread(device_web_server.start, ())
-            print("   ✅ 设备Web服务器已启动")
             
         except Exception as e:
             print("   ❌ 设备Web服务器错误: " + str(e))
     
     def start_websocket_server(self):
         """启动WebSocket服务器（增强版：连接池管理）"""
-        print("\n🔌 启动WebSocket服务器...")
-        print("   端口: " + str(WS_PORT))
+        print("✅ WebSocket: ws://" + str(self.ip) + ":" + str(WS_PORT))
         
         addr = socket.getaddrinfo('0.0.0.0', WS_PORT)[0][-1]
         s = socket.socket()
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.settimeout(1.0)  # 设置accept超时，避免阻塞
         s.bind(addr)
-        s.listen(10)  # 增加并发连接数：5 → 10
-        
-        print("✅ WebSocket服务器已启动")
-        print("   连接地址: ws://" + str(self.ip) + ":" + str(WS_PORT))
-        print("   最大连接数: 10")
+        s.listen(10)
         
         error_count = 0
         while self.running:
@@ -1073,46 +1019,15 @@ class TansuodouDevice:
         print("\n[步骤 3/4] mDNS广播")
         self.start_mdns()
         
-        # 步骤4: 设备就绪（移除心跳机制）
-        print("\n[步骤 4/4] 设备就绪")
-        # ✅ 不再需要HTTP心跳：WebSocket长连接 + 前端实时ping检测
-        if registration_success:
-            print("✅ 设备已注册到云端")
-        else:
-            print("⚠️  未注册到云端（本地模式）")
-            print("   请手动绑定设备ID: " + str(self.device_id))
+        # 设备就绪
+        print("🎉 设备就绪 | " + str(self.device_id))
         
-        # 显示设备就绪信息
-        print("\n" + "="*50)
-        print("🎉 设备已就绪！")
-        print("="*50)
-        print("📋 设备ID: " + str(self.device_id))
-        print("🏷️ 设备名称: " + str(self.device_name))
-        print("📍 IP地址: " + str(self.ip))
-        print("🔌 WebSocket: ws://" + str(self.ip) + ":" + str(WS_PORT))
-        
-        if registration_success:
-            print("☁️  云端状态: ✅ 已注册")
-        else:
-            print("☁️  云端状态: ⚠️  本地模式")
-        
-        print("="*50 + "\n")
-        
-        # 检测 main.py 是否存在并运行
-        print("\n[额外服务] 检测用户程序")
+        # 检测 main.py
         self.check_main_py_status()
         
-        # 启动 OTA HTTP 服务器
-        print("\n[额外服务] OTA更新服务")
+        # 启动服务
         self.start_ota_http_server()
-        
-        # 启动设备 Web 服务器（离线控制界面）
-        print("\n[额外服务] 设备Web控制界面")
         self.start_device_web_server()
-        
-        # MQTT服务已移除
-        
-        # 启动WebSocket服务器
         self.start_websocket_server()
 
 # Main Entry
@@ -1120,5 +1035,7 @@ def start(config):
     """启动主程序"""
     device = TansuodouDevice(config)
     device.run()
+
+
 
 
