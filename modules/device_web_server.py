@@ -1,4 +1,4 @@
-﻿# TansuoDou IoT 3.0 - Device Web Server
+# TansuoDou IoT 3.0 - Device Web Server
 # 绂荤嚎璁惧鎺у埗 Web 鐣岄潰锛堢被 ESPHome Web Server锛?# 鏀寔锛氫紶鎰熷櫒鏁版嵁灞曠ず銆佸紑鍏虫帶鍒躲€佸疄鏃剁姸鎬?
 import network
 import socket
@@ -234,7 +234,7 @@ def parse_query(query_string):
                 params[key] = value
     return params
 
-def start_web_server(port=80):
+def start_web_server(port=8081):
     """Start device web server"""
     device_id = get_device_id()
     
@@ -325,4 +325,4 @@ def register_switch(name, state=False):
 
 def start():
     """Start web server (entry point)"""
-    start_web_server(80)
+    start_web_server(8081)
