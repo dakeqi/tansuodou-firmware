@@ -1,19 +1,13 @@
-﻿# TansuoDou IoT 3.0 - Device Web Server
-# 绂荤嚎璁惧鎺у埗 Web 鐣岄潰锛堢被 ESPHome Web Server锛?# 鏀寔锛氫紶鎰熷櫒鏁版嵁灞曠ず銆佸紑鍏虫帶鍒躲€佸疄鏃剁姸鎬?
+# TansuoDou IoT 3.0 - Device Web Server
+# 离线设备控制 Web 界面（类 ESPHome Web Server）
+# 支持：传感器数据展示、开关控制、实时状态
+
 import network
 import socket
 import machine
 import ubinascii
 import time
 import _thread
-
-# Import file manager
-try:
-    from file_manager import handle_file_api
-    FILE_MANAGER_ENABLED = True
-except:
-    FILE_MANAGER_ENABLED = False
-    print('[WARN] 文件管理模块未加载')
 
 try:
     import ujson as json
@@ -85,7 +79,7 @@ def get_dashboard_html():
     html += '<!DOCTYPE html><html lang="zh-CN"><head>'
     html += '<meta charset="UTF-8">'
     html += '<meta name="viewport" content="width=device-width,initial-scale=1.0">'
-    html += '<title>璁惧鎺у埗 - ' + device_id + '</title>'
+    html += '<title>设备控制 - ' + device_id + '</title>'
     
     # Embedded CSS
     html += '<style>'
@@ -125,31 +119,31 @@ def get_dashboard_html():
     
     # Header
     html += '<header>'
-    html += '<h1>馃彔 璁惧鎺у埗涓績</h1>'
-    html += '<div class="device-id">璁惧ID: ' + device_id + '</div>'
+    html += '<h1>🏠 设备控制中心</h1>'
+    html += '<div class="device-id">设备ID: ' + device_id + '</div>'
     html += '</header>'
     
     html += '<div class="grid">'
     
     # Device Info Card
     html += '<div class="card">'
-    html += '<div class="card-title">馃搳 璁惧淇℃伅</div>'
-    html += '<div class="info-item"><span class="info-label">鐘舵€?/span>'
-    html += '<span class="status-online">鈼?鍦ㄧ嚎</span></div>'
-    html += '<div class="info-item"><span class="info-label">IP鍦板潃</span>'
+    html += '<div class="card-title">📊 设备信息</div>'
+    html += '<div class="info-item"><span class="info-label">状态</span>'
+    html += '<span class="status-online">● 在线</span></div>'
+    html += '<div class="info-item"><span class="info-label">IP地址</span>'
     html += '<span class="info-value">' + ip + '</span></div>'
-    html += '<div class="info-item"><span class="info-label">WiFi淇″彿</span>'
+    html += '<div class="info-item"><span class="info-label">WiFi信号</span>'
     html += '<span class="info-value">' + str(device_info['rssi']) + ' dBm</span></div>'
-    html += '<div class="info-item"><span class="info-label">鍙敤鍐呭瓨</span>'
+    html += '<div class="info-item"><span class="info-label">可用内存</span>'
     html += '<span class="info-value">' + str(device_info['free_memory'] // 1024) + ' KB</span></div>'
-    html += '<div class="info-item"><span class="info-label">杩愯鏃堕棿</span>'
-    html += '<span class="info-value">' + str(int(device_info['uptime'])) + ' 绉?/span></div>'
-    html += '<button class="refresh-btn" onclick="location.reload()">馃攧 鍒锋柊</button>'
+    html += '<div class="info-item"><span class="info-label">运行时间</span>'
+    html += '<span class="info-value">' + str(int(device_info['uptime'])) + ' 秒</span></div>'
+    html += '<button class="refresh-btn" onclick="location.reload()">🔄 刷新</button>'
     html += '</div>'
     
     # Sensors Card
     html += '<div class="card">'
-    html += '<div class="card-title">馃尅锔?浼犳劅鍣ㄦ暟鎹?/div>'
+    html += '<div class="card-title">🌡️ 传感器数据</div>'
     
     if device_state.sensors:
         for name, data in device_state.sensors.items():
@@ -158,13 +152,13 @@ def get_dashboard_html():
             html += '<span class="sensor-value">' + str(data['value']) + ' ' + data['unit'] + '</span>'
             html += '</div>'
     else:
-        html += '<p style="color:#999;text-align:center;padding:20px">鏆傛棤浼犳劅鍣ㄦ暟鎹?/p>'
+        html += '<p style="color:#999;text-align:center;padding:20px">暂无传感器数据</p>'
     
     html += '</div>'
     
     # Switches Card
     html += '<div class="card">'
-    html += '<div class="card-title">馃挕 寮€鍏虫帶鍒?/div>'
+    html += '<div class="card-title">💡 开关控制</div>'
     
     if device_state.switches:
         for name, data in device_state.switches.items():
@@ -175,7 +169,7 @@ def get_dashboard_html():
             html += 'onclick="toggleSwitch(\'' + name + '\',' + str(not data['state']).lower() + ')"></div>'
             html += '</div>'
     else:
-        html += '<p style="color:#999;text-align:center;padding:20px">鏆傛棤寮€鍏宠澶?/p>'
+        html += '<p style="color:#999;text-align:center;padding:20px">暂无开关设备</p>'
     
     html += '</div>'
     
@@ -213,7 +207,7 @@ def handle_api_request(path, query):
         
         if name:
             device_state.update_switch(name, state)
-            # TODO: 瀹為檯鎺у埗GPIO寮曡剼
+            # TODO: 实际控制GPIO引脚
             # Example: machine.Pin(pin_number, machine.Pin.OUT).value(1 if state else 0)
             response += json.dumps({'success': True, 'name': name, 'state': state})
         else:
@@ -245,10 +239,10 @@ def start_web_server(port=80):
     s.bind(addr)
     s.listen(1)
     
-    print("\n[OK] 璁惧Web鏈嶅姟鍣ㄥ凡鍚姩")
-    print("   鐩戝惉绔彛: " + str(port))
-    print("   璁惧ID: " + device_id)
-    print("   璁块棶鍦板潃: http://<璁惧IP>")
+    print("\n[OK] 设备Web服务器已启动")
+    print("   监听端口: " + str(port))
+    print("   设备ID: " + device_id)
+    print("   访问地址: http://<设备IP>")
     
     while True:
         conn = None
@@ -291,13 +285,6 @@ def start_web_server(port=80):
                 if path == '/' or path == '/index.html':
                     response = get_dashboard_html()
                     conn.send(response)
-                elif path.startswith('/files') and FILE_MANAGER_ENABLED:
-                    # 文件管理API
-                    body = ''
-                    if method == 'POST' and '\r\n\r\n' in request_str:
-                        body = request_str.split('\r\n\r\n', 1)[1]
-                    response = handle_file_api(path, query, method, body)
-                    conn.send(response)
                 elif path.startswith('/api/'):
                     response = handle_api_request(path, query)
                     conn.send(response)
@@ -306,7 +293,7 @@ def start_web_server(port=80):
                     conn.send(b'HTTP/1.1 404 Not Found\r\n\r\n')
         
         except Exception as e:
-            print("[ERROR] Web鏈嶅姟鍣ㄩ敊璇? " + str(e))
+            print("[ERROR] Web服务器错误: " + str(e))
         finally:
             if conn:
                 try:
