@@ -184,6 +184,12 @@ jobs:
           
           if [ "${{ matrix.board }}" = "ESP32_GENERIC_S3" ]; then
             PARTITION="partitions-ota-8mb.csv"
+            # 应用ESP32-S3自定义配置(启用PSRAM和优化Socket)
+            if [ -f "$GITHUB_WORKSPACE/sdkconfig/sdkconfig.esp32s3" ]; then
+              echo "📝 Applying custom sdkconfig for ESP32-S3 (PSRAM + 32 Sockets)"
+              cp "$GITHUB_WORKSPACE/sdkconfig/sdkconfig.esp32s3" boards/ESP32_GENERIC_S3/sdkconfig.board
+              cat boards/ESP32_GENERIC_S3/sdkconfig.board | grep -E "SPIRAM|LWIP_MAX_SOCKETS"
+            fi
           else
             PARTITION="partitions-ota-4mb.csv"
           fi

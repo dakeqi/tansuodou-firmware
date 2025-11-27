@@ -243,7 +243,7 @@ def start_web_server(port=8081):
     s = socket.socket()
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(addr)
-    s.listen(5)
+    s.listen(20)  # ESP32-S3 N16R8: 启用PSRAM后支持32个Socket，设置20个队列
     
     print("\n[OK] 璁惧Web鏈嶅姟鍣ㄥ凡鍚姩")
     print("   鐩戝惉绔彛: " + str(port))
