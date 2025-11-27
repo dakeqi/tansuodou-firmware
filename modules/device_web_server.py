@@ -1,5 +1,5 @@
 # TansuoDou IoT 3.0 - Device Web Server
-# 绂荤嚎璁惧鎺у埗 Web 鐣岄潰锛堢被 ESPHome Web Server锛?# 鏀寔锛氫紶鎰熷櫒鏁版嵁灞曠ず銆佸紑鍏虫帶鍒躲€佸疄鏃剁姸鎬?
+# 绂荤嚎设备控制 Web 鐣岄潰锛堢被 ESPHome Web Server锛?# 鏀寔锛氫紶鎰熷櫒数据灞曠ず銆佸紑鍏虫帶鍒躲€佸疄鏃剁姸鎬?
 import network
 import socket
 import machine
@@ -85,7 +85,7 @@ def get_dashboard_html():
     html += '<!DOCTYPE html><html lang="zh-CN"><head>'
     html += '<meta charset="UTF-8">'
     html += '<meta name="viewport" content="width=device-width,initial-scale=1.0">'
-    html += '<title>璁惧鎺у埗 - ' + device_id + '</title>'
+    html += '<title>设备控制 - ' + device_id + '</title>'
     
     # Embedded CSS
     html += '<style>'
@@ -125,31 +125,31 @@ def get_dashboard_html():
     
     # Header
     html += '<header>'
-    html += '<h1>馃彔 璁惧鎺у埗涓績</h1>'
-    html += '<div class="device-id">璁惧ID: ' + device_id + '</div>'
+    html += '<h1>馃彔 设备控制涓績</h1>'
+    html += '<div class="device-id">设备ID: ' + device_id + '</div>'
     html += '</header>'
     
     html += '<div class="grid">'
     
     # Device Info Card
     html += '<div class="card">'
-    html += '<div class="card-title">馃搳 璁惧淇℃伅</div>'
-    html += '<div class="info-item"><span class="info-label">鐘舵€?/span>'
-    html += '<span class="status-online">鈼?鍦ㄧ嚎</span></div>'
-    html += '<div class="info-item"><span class="info-label">IP鍦板潃</span>'
+    html += '<div class="card-title">馃搳 设备信息</div>'
+    html += '<div class="info-item"><span class="info-label">状态/span>'
+    html += '<span class="status-online">鈼?在线</span></div>'
+    html += '<div class="info-item"><span class="info-label">IP地址</span>'
     html += '<span class="info-value">' + ip + '</span></div>'
-    html += '<div class="info-item"><span class="info-label">WiFi淇″彿</span>'
+    html += '<div class="info-item"><span class="info-label">WiFi信号</span>'
     html += '<span class="info-value">' + str(device_info['rssi']) + ' dBm</span></div>'
-    html += '<div class="info-item"><span class="info-label">鍙敤鍐呭瓨</span>'
+    html += '<div class="info-item"><span class="info-label">鍙敤内存</span>'
     html += '<span class="info-value">' + str(device_info['free_memory'] // 1024) + ' KB</span></div>'
-    html += '<div class="info-item"><span class="info-label">杩愯鏃堕棿</span>'
-    html += '<span class="info-value">' + str(int(device_info['uptime'])) + ' 绉?/span></div>'
-    html += '<button class="refresh-btn" onclick="location.reload()">馃攧 鍒锋柊</button>'
+    html += '<div class="info-item"><span class="info-label">运行时间</span>'
+    html += '<span class="info-value">' + str(int(device_info['uptime'])) + ' 秒/span></div>'
+    html += '<button class="refresh-btn" onclick="location.reload()">馃攧 刷新</button>'
     html += '</div>'
     
     # Sensors Card
     html += '<div class="card">'
-    html += '<div class="card-title">馃尅锔?浼犳劅鍣ㄦ暟鎹?/div>'
+    html += '<div class="card-title">🌡️ 传感器数据?/div>'
     
     if device_state.sensors:
         for name, data in device_state.sensors.items():
@@ -158,13 +158,13 @@ def get_dashboard_html():
             html += '<span class="sensor-value">' + str(data['value']) + ' ' + data['unit'] + '</span>'
             html += '</div>'
     else:
-        html += '<p style="color:#999;text-align:center;padding:20px">鏆傛棤浼犳劅鍣ㄦ暟鎹?/p>'
+        html += '<p style="color:#999;text-align:center;padding:20px">暂无浼犳劅鍣ㄦ暟鎹?/p>'
     
     html += '</div>'
     
     # Switches Card
     html += '<div class="card">'
-    html += '<div class="card-title">馃挕 寮€鍏虫帶鍒?/div>'
+    html += '<div class="card-title">💡 开关控制?/div>'
     
     if device_state.switches:
         for name, data in device_state.switches.items():
@@ -175,7 +175,7 @@ def get_dashboard_html():
             html += 'onclick="toggleSwitch(\'' + name + '\',' + str(not data['state']).lower() + ')"></div>'
             html += '</div>'
     else:
-        html += '<p style="color:#999;text-align:center;padding:20px">鏆傛棤寮€鍏宠澶?/p>'
+        html += '<p style="color:#999;text-align:center;padding:20px">暂无寮€鍏宠澶?/p>'
     
     html += '</div>'
     
@@ -213,7 +213,7 @@ def handle_api_request(path, query):
         
         if name:
             device_state.update_switch(name, state)
-            # TODO: 瀹為檯鎺у埗GPIO寮曡剼
+            # TODO: 瀹為檯控制GPIO寮曡剼
             # Example: machine.Pin(pin_number, machine.Pin.OUT).value(1 if state else 0)
             response += json.dumps({'success': True, 'name': name, 'state': state})
         else:
@@ -245,10 +245,10 @@ def start_web_server(port=8081):
     s.bind(addr)
     s.listen(20)  # ESP32-S3 N16R8: 启用PSRAM后支持32个Socket，设置20个队列
     
-    print("\n[OK] 璁惧Web鏈嶅姟鍣ㄥ凡鍚姩")
-    print("   鐩戝惉绔彛: " + str(port))
-    print("   璁惧ID: " + device_id)
-    print("   璁块棶鍦板潃: http://<璁惧IP>")
+    print("\n[OK] 设备Web服务器已启动")
+    print("   监听端口: " + str(port))
+    print("   设备ID: " + device_id)
+    print("   访问地址: http://<设备IP>:" + str(port))
     
     while True:
         conn = None
@@ -306,7 +306,7 @@ def start_web_server(port=8081):
                     conn.send(b'HTTP/1.1 404 Not Found\r\n\r\n')
         
         except Exception as e:
-            print("[ERROR] Web鏈嶅姟鍣ㄩ敊璇? " + str(e))
+            print("[ERROR] Web服务器错误: " + str(e))
         finally:
             if conn:
                 try:
