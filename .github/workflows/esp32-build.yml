@@ -108,7 +108,8 @@ jobs:
           cp modules/config_portal.py ~/micropython/ports/esp32/modules/
           cp modules/dns_server.py ~/micropython/ports/esp32/modules/
           cp modules/device_web_server.py ~/micropython/ports/esp32/modules/
-          echo "  ✅ Base modules (ota_manager, ota_http_server, config_portal, dns_server, device_web_server)"
+          cp modules/file_manager.py ~/micropython/ports/esp32/modules/
+          echo "  ✅ Base modules (ota_manager, ota_http_server, config_portal, dns_server, device_web_server, file_manager)"
           
           # ESP32特殊功能（ESP32/S2/S3支持触摸，ESP32支持霍尔，ESP32/S2支持DAC）
           if [[ "${{ matrix.board }}" == "ESP32_GENERIC" ]] || \
