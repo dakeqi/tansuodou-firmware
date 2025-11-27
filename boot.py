@@ -175,7 +175,7 @@ def start_serial_listen_mode():
             time.sleep(1)
 
 def start_config_mode(manual=False):
-    """启动WiFi配罡模式（带重试机制）"""
+    """启动WiFi配置模式（带重试机制）"""
     if manual:
         print("\n" + "-"*50)
         print("  📱 手动启动WiFi配网模式")
