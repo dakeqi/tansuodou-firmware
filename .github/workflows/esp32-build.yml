@@ -86,6 +86,10 @@ jobs:
           mkdir -p ~/micropython/ports/esp32/tansuodou_frozen
           cp frozen/*.py ~/micropython/ports/esp32/tansuodou_frozen/
           
+          # 确保version.py末尾有换行符（关键修复）
+          echo "" >> ~/micropython/ports/esp32/tansuodou_frozen/version.py
+          echo "✅ Verified version.py has proper line endings"
+          
           # 将tansuodou_main.py也加入frozen模块（确保版本一致性）
           cp modules/tansuodou_main.py ~/micropython/ports/esp32/tansuodou_frozen/
           
