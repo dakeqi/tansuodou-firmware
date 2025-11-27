@@ -243,7 +243,7 @@ def start_web_server(port=8081):
     s = socket.socket()
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(addr)
-    s.listen(1)
+    s.listen(5)
     
     print("\n[OK] 璁惧Web鏈嶅姟鍣ㄥ凡鍚姩")
     print("   鐩戝惉绔彛: " + str(port))
