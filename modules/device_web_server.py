@@ -294,6 +294,24 @@ def start_web_server(port=80):
                 if path == '/' or path == '/index.html':
                     response = get_dashboard_html()
                     conn.send(response)
+                elif path == '/status':
+                    # 设备状态API（支持CORS）
+                    response = handle_api_request('/api/status', query)
+                    # 添加CORS响应头
+                    response = response.replace(
+                        b'HTTP/1.1 200 OK\r\n',
+                        b'HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\n'
+                    )
+                    conn.send(response)
+                elif path.startswith('/switch/'):
+                    # 开关控制API（支持CORS）
+                    response = handle_api_request('/api' + path, query)
+                    # 添加CORS响应头
+                    response = response.replace(
+                        b'HTTP/1.1 200 OK\r\n',
+                        b'HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\n'
+                    )
+                    conn.send(response)
                 elif path.startswith('/api/'):
                     response = handle_api_request(path, query)
                     conn.send(response)
@@ -377,6 +395,12 @@ def start_file_manager_server(port=8081):
                     if method == 'POST' and '\r\n\r\n' in request_str:
                         body = request_str.split('\r\n\r\n', 1)[1]
                     response = handle_file_api(path, query, method, body)
+                    # 添加CORS响应头
+                    if b'HTTP/1.1 200 OK' in response:
+                        response = response.replace(
+                            b'HTTP/1.1 200 OK\r\n',
+                            b'HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\n'
+                        )
                     conn.send(response)
                 else:
                     # 404
