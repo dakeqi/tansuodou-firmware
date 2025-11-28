@@ -339,18 +339,84 @@ def register_switch(name, state=False):
 
 def start_file_manager_server(port=8081):
     """文件管理服务器（独立线程 - 8081端口）"""
-    device_id = get_device_id()
+    import time
     
-    print("\n[OK] 文件管理服务器已启动")
+    device_id = get_device_id()
+    print("\n[INFO] 文件管理服务器启动中...")
     print("   监听端口: " + str(port))
     print("   访问地址: http://<设备IP>:" + str(port) + "/files")
     
-    # Create socket
-    addr = socket.getaddrinfo('0.0.0.0', port)[0][-1]
-    s = socket.socket()
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind(addr)
-    s.listen(20)
+    # 重试机制：如果端口被占用，等待后重试
+    max_retries = 3
+    retry_count = 0
+    s = None
+    
+    while retry_count < max_retries:
+        try:
+            # Create socket
+            print("   [尝试 " + str(retry_count + 1) + "/" + str(max_retries) + "] 创建socket...")
+            addr = socket.getaddrinfo('0.0.0.0', port)[0][-1]
+            s = socket.socket()
+            
+            # 关键：允许地址重用（解决EADDRINUSE错误）
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            
+            print("   绑定端口 " + str(port) + "...")
+            s.bind(addr)
+            
+            print("   开始监听...")
+            s.listen(20)
+            
+            print("   ✅ 文件管理服务器就绪！")
+            break  # 成功，退出重试循环
+            
+        except OSError as e:
+            retry_count += 1
+            err_code = e.errno if hasattr(e, 'errno') else (e.args[0] if e.args else None)
+            
+            if err_code == 98 or err_code == 112:  # EADDRINUSE (Linux:98, Windows:112)
+                print("   ⚠️  端口" + str(port) + "被占用！")
+                
+                if s:
+                    try:
+                        s.close()
+                    except:
+                        pass
+                    s = None
+                
+                if retry_count < max_retries:
+                    wait_time = retry_count * 2  # 递增等待：2s, 4s, 6s
+                    print("   ⏳ 等待 " + str(wait_time) + " 秒后重试...")
+                    time.sleep(wait_time)
+                else:
+                    print("\n[FATAL] 文件管理服务器启动失败！")
+                    print("   原因：端口" + str(port) + "持续被占用")
+                    print("   建议：")
+                    print("     1. 重启设备")
+                    print("     2. 检查是否有其他服务占用" + str(port) + "端口")
+                    return
+            else:
+                print("   ❌ Socket错误: " + str(e))
+                if retry_count < max_retries:
+                    time.sleep(2)
+                else:
+                    print("\n[FATAL] 文件管理服务器启动失败！")
+                    print("   错误: " + str(e))
+                    return
+        
+        except Exception as e:
+            print("   ❌ 未知错误: " + str(e))
+            retry_count += 1
+            if retry_count < max_retries:
+                time.sleep(2)
+            else:
+                print("\n[FATAL] 文件管理服务器启动失败！")
+                return
+    
+    # 主循环：处理请求
+    if s is None:
+        print("[ERROR] Socket创建失败，无法启动服务器")
+        return
     
     while True:
         conn = None
@@ -407,7 +473,8 @@ def start_file_manager_server(port=8081):
                     conn.send(b'HTTP/1.1 404 Not Found\r\n\r\n')
         
         except Exception as e:
-            print("[ERROR] 文件管理服务器错误: " + str(e))
+            # 静默处理单个请求错误，不影响服务器运行
+            pass
         finally:
             if conn:
                 try:
@@ -417,14 +484,25 @@ def start_file_manager_server(port=8081):
 
 def start():
     """Start web server (entry point)"""
+    print("\n[INFO] 设备Web服务器启动中...")
+    print("   FILE_MANAGER_ENABLED = " + str(FILE_MANAGER_ENABLED))
+    
     # 启动两个服务器：
     # 1. 设备控制界面 - 80端口
     # 2. 文件管理服务器 - 8081端口（独立线程）
     
     # 启动文件管理服务器（独立线程）
     if FILE_MANAGER_ENABLED:
-        import _thread
-        _thread.start_new_thread(start_file_manager_server, ())
+        try:
+            import _thread
+            print("   正在启动8081端口文件管理服务器...")
+            _thread.start_new_thread(start_file_manager_server, ())
+            print("   ✅ 8081端口线程已创建")
+        except Exception as e:
+            print("   ❌ 8081端口启动失败: " + str(e))
+    else:
+        print("   ⏸️  文件管理服务器已禁用（模块导入失败）")
     
     # 启动设备控制界面（主线程）
+    print("   正在启动80端口设备控制界面...")
     start_web_server(80)
