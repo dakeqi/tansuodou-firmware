@@ -238,7 +238,7 @@ def parse_query(query_string):
     return params
 
 def start_web_server(port=80):
-    """Start device web server"""
+    """Start device web server (设备控制界面 - 80端口)"""
     device_id = get_device_id()
     
     # Create socket
@@ -251,11 +251,7 @@ def start_web_server(port=80):
     print("\n[OK] 设备Web服务器已启动")
     print("   监听端口: " + str(port))
     print("   设备ID: " + device_id)
-    # 显示访问地址（80端口可省略）
-    if port == 80:
-        print("   访问地址: http://<设备IP>")
-    else:
-        print("   访问地址: http://<设备IP>:" + str(port))
+    print("   访问地址: http://<设备IP>:" + str(port))
     
     while True:
         conn = None
@@ -298,13 +294,6 @@ def start_web_server(port=80):
                 if path == '/' or path == '/index.html':
                     response = get_dashboard_html()
                     conn.send(response)
-                elif path.startswith('/files') and FILE_MANAGER_ENABLED:
-                    # 文件管理API
-                    body = ''
-                    if method == 'POST' and '\r\n\r\n' in request_str:
-                        body = request_str.split('\r\n\r\n', 1)[1]
-                    response = handle_file_api(path, query, method, body)
-                    conn.send(response)
                 elif path.startswith('/api/'):
                     response = handle_api_request(path, query)
                     conn.send(response)
@@ -330,6 +319,88 @@ def register_switch(name, state=False):
     """Register a switch"""
     device_state.update_switch(name, state)
 
+def start_file_manager_server(port=8081):
+    """文件管理服务器（独立线程 - 8081端口）"""
+    device_id = get_device_id()
+    
+    print("\n[OK] 文件管理服务器已启动")
+    print("   监听端口: " + str(port))
+    print("   访问地址: http://<设备IP>:" + str(port) + "/files")
+    
+    # Create socket
+    addr = socket.getaddrinfo('0.0.0.0', port)[0][-1]
+    s = socket.socket()
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(addr)
+    s.listen(20)
+    
+    while True:
+        conn = None
+        try:
+            conn, addr = s.accept()
+            conn.settimeout(5.0)
+            
+            # Read request
+            request = b""
+            max_size = 2048
+            
+            while len(request) < max_size:
+                try:
+                    chunk = conn.recv(512)
+                    if not chunk:
+                        break
+                    request += chunk
+                    if b'\r\n\r\n' in request:
+                        break
+                except OSError:
+                    break
+            
+            if len(request) == 0:
+                continue
+            
+            request_str = request.decode('utf-8', 'ignore')
+            
+            # Parse request line
+            lines = request_str.split('\r\n')
+            if len(lines) > 0:
+                method, path_query, _ = lines[0].split(' ', 2)
+                
+                # Split path and query
+                if '?' in path_query:
+                    path, query = path_query.split('?', 1)
+                else:
+                    path, query = path_query, ''
+                
+                # 处理文件管理API请求
+                if path.startswith('/files'):
+                    body = ''
+                    if method == 'POST' and '\r\n\r\n' in request_str:
+                        body = request_str.split('\r\n\r\n', 1)[1]
+                    response = handle_file_api(path, query, method, body)
+                    conn.send(response)
+                else:
+                    # 404
+                    conn.send(b'HTTP/1.1 404 Not Found\r\n\r\n')
+        
+        except Exception as e:
+            print("[ERROR] 文件管理服务器错误: " + str(e))
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except:
+                    pass
+
 def start():
     """Start web server (entry point)"""
+    # 启动两个服务器：
+    # 1. 设备控制界面 - 80端口
+    # 2. 文件管理服务器 - 8081端口（独立线程）
+    
+    # 启动文件管理服务器（独立线程）
+    if FILE_MANAGER_ENABLED:
+        import _thread
+        _thread.start_new_thread(start_file_manager_server, ())
+    
+    # 启动设备控制界面（主线程）
     start_web_server(80)
