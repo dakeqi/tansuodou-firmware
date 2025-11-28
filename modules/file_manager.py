@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 # TansuoDou IoT - File Manager Module
 # 设备文件管理 HTTP API
 # 支持：文件列表、读取、删除、上传
@@ -69,13 +69,9 @@ def delete_file(path):
 
 def handle_file_api(path, query, method, body=''):
     """处理文件管理API请求"""
-    response = 'HTTP/1.1 200 OK\r\n'
-    response += 'Content-Type: application/json\r\n'
-    response += 'Access-Control-Allow-Origin: *\r\n'
-    response += 'Connection: close\r\n\r\n'
-    
     try:
         if path == '/files' and method == 'GET':
+            # 列出文件
             file_path = '/'
             if query:
                 params = query.split('&')
@@ -84,9 +80,15 @@ def handle_file_api(path, query, method, body=''):
                         file_path = url_decode(param[5:])
             
             files = list_files(file_path)
+            response = 'HTTP/1.1 200 OK\r\n'
+            response += 'Content-Type: application/json\r\n'
+            response += 'Access-Control-Allow-Origin: *\r\n'
+            response += 'Connection: close\r\n\r\n'
             response += json.dumps({'files': files})
+            return response.encode('utf-8')
         
         elif path == '/files/read' and method == 'GET':
+            # 读取文件
             file_path = ''
             if query:
                 params = query.split('&')
@@ -95,43 +97,101 @@ def handle_file_api(path, query, method, body=''):
                         file_path = url_decode(param[5:])
             
             if not file_path:
-                response = 'HTTP/1.1 400 Bad Request\r\n\r\n'
+                response = 'HTTP/1.1 400 Bad Request\r\n'
+                response += 'Content-Type: application/json\r\n'
+                response += 'Access-Control-Allow-Origin: *\r\n'
+                response += 'Connection: close\r\n\r\n'
                 response += json.dumps({'error': '缺少path参数'})
             else:
                 content = read_file(file_path)
+                response = 'HTTP/1.1 200 OK\r\n'
+                response += 'Content-Type: application/json\r\n'
+                response += 'Access-Control-Allow-Origin: *\r\n'
+                response += 'Connection: close\r\n\r\n'
                 response += json.dumps({'content': content})
+            return response.encode('utf-8')
         
         elif path == '/files/delete' and method == 'POST':
+            # 删除文件
+            if not body:
+                response = 'HTTP/1.1 400 Bad Request\r\n'
+                response += 'Content-Type: application/json\r\n'
+                response += 'Access-Control-Allow-Origin: *\r\n'
+                response += 'Connection: close\r\n\r\n'
+                response += json.dumps({'error': '缺少请求体'})
+                return response.encode('utf-8')
+            
             data = json.loads(body)
             file_path = data.get('path', '')
             
             if not file_path:
-                response = 'HTTP/1.1 400 Bad Request\r\n\r\n'
+                response = 'HTTP/1.1 400 Bad Request\r\n'
+                response += 'Content-Type: application/json\r\n'
+                response += 'Access-Control-Allow-Origin: *\r\n'
+                response += 'Connection: close\r\n\r\n'
                 response += json.dumps({'error': '缺少path参数'})
             else:
                 delete_file(file_path)
+                response = 'HTTP/1.1 200 OK\r\n'
+                response += 'Content-Type: application/json\r\n'
+                response += 'Access-Control-Allow-Origin: *\r\n'
+                response += 'Connection: close\r\n\r\n'
                 response += json.dumps({'success': True})
+            return response.encode('utf-8')
         
         elif path == '/files/upload' and method == 'POST':
+            # 上传文件
+            if not body:
+                response = 'HTTP/1.1 400 Bad Request\r\n'
+                response += 'Content-Type: application/json\r\n'
+                response += 'Access-Control-Allow-Origin: *\r\n'
+                response += 'Connection: close\r\n\r\n'
+                response += json.dumps({'error': '缺少请求体'})
+                return response.encode('utf-8')
+            
             data = json.loads(body)
             file_path = data.get('path', '')
             content = data.get('content', '')
             
-            if not file_path or not content:
-                response = 'HTTP/1.1 400 Bad Request\r\n\r\n'
-                response += json.dumps({'error': '缺少path或content参数'})
+            if not file_path:
+                response = 'HTTP/1.1 400 Bad Request\r\n'
+                response += 'Content-Type: application/json\r\n'
+                response += 'Access-Control-Allow-Origin: *\r\n'
+                response += 'Connection: close\r\n\r\n'
+                response += json.dumps({'error': '缺少path参数'})
             else:
                 with open(file_path, 'w') as f:
                     f.write(content)
+                response = 'HTTP/1.1 200 OK\r\n'
+                response += 'Content-Type: application/json\r\n'
+                response += 'Access-Control-Allow-Origin: *\r\n'
+                response += 'Connection: close\r\n\r\n'
                 response += json.dumps({'success': True})
+            return response.encode('utf-8')
         
         else:
-            response = 'HTTP/1.1 404 Not Found\r\n\r\n'
+            # 404 - 未知端点
+            response = 'HTTP/1.1 404 Not Found\r\n'
+            response += 'Content-Type: application/json\r\n'
+            response += 'Access-Control-Allow-Origin: *\r\n'
+            response += 'Connection: close\r\n\r\n'
             response += json.dumps({'error': '未知的端点'})
+            return response.encode('utf-8')
             
-    except Exception as e:
-        response = 'HTTP/1.1 500 Internal Server Error\r\n'
-        response += 'Content-Type: application/json\r\n\r\n'
-        response += json.dumps({'error': str(e)})
+    except json.JSONDecodeError as e:
+        # JSON解析错误
+        response = 'HTTP/1.1 400 Bad Request\r\n'
+        response += 'Content-Type: application/json\r\n'
+        response += 'Access-Control-Allow-Origin: *\r\n'
+        response += 'Connection: close\r\n\r\n'
+        response += json.dumps({'error': 'JSON格式错误: ' + str(e)})
+        return response.encode('utf-8')
     
-    return response.encode('utf-8')
+    except Exception as e:
+        # 通用错误
+        response = 'HTTP/1.1 500 Internal Server Error\r\n'
+        response += 'Content-Type: application/json\r\n'
+        response += 'Access-Control-Allow-Origin: *\r\n'
+        response += 'Connection: close\r\n\r\n'
+        response += json.dumps({'error': str(e)})
+        return response.encode('utf-8')
