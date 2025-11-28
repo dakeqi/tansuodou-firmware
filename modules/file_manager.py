@@ -1,4 +1,5 @@
-﻿# TansuoDou IoT - File Manager Module
+﻿# -*- coding: utf-8 -*-
+# TansuoDou IoT - File Manager Module
 # 设备文件管理 HTTP API
 # 支持：文件列表、读取、删除、上传
 
