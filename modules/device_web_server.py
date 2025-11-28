@@ -237,7 +237,7 @@ def parse_query(query_string):
                 params[key] = value
     return params
 
-def start_web_server(port=8081):
+def start_web_server(port=80):
     """Start device web server"""
     device_id = get_device_id()
     
@@ -251,7 +251,11 @@ def start_web_server(port=8081):
     print("\n[OK] 设备Web服务器已启动")
     print("   监听端口: " + str(port))
     print("   设备ID: " + device_id)
-    print("   访问地址: http://<设备IP>:" + str(port))
+    # 显示访问地址（80端口可省略）
+    if port == 80:
+        print("   访问地址: http://<设备IP>")
+    else:
+        print("   访问地址: http://<设备IP>:" + str(port))
     
     while True:
         conn = None
@@ -328,4 +332,4 @@ def register_switch(name, state=False):
 
 def start():
     """Start web server (entry point)"""
-    start_web_server(8081)
+    start_web_server(80)
